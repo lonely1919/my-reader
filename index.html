@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 /* ── Reset & Base ── */
@@ -503,6 +504,10 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
         <button class="tb-btn" id="btnChapters" onclick="toggleChapters()" title="目录" style="display:none">
           <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
         </button>
+        <!-- EPUB mode -->
+        <button class="tb-btn" id="btnEpubMode" onclick="toggleEpubMode()" title="切换 EPUB 快速模式" style="display:none">
+          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7"/><path d="M9 11h7"/></svg>
+        </button>
         <!-- Bookmark -->
         <button class="tb-btn" id="btnBookmark" onclick="toggleBookmark()" title="书签" style="display:none">
           <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" id="bmkIcon"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
@@ -657,6 +662,7 @@ let epubBook = null, epubRendition = null;
 let pdfDoc = null, pdfPage = 1, pdfTotal = 0;
 // TXT
 let txtChunks = [], txtChunk = 0;
+let epubMode = 'full';
 
 let fsVal = store.fs||17;
 let lhVal = store.lh||1.9;
@@ -936,6 +942,7 @@ async function openBook(id){
   document.getElementById('btnChapters').style.display='';
   document.getElementById('btnBookmark').style.display='';
   document.getElementById('btnLibrary').style.display='';
+  document.getElementById('btnEpubMode').style.display=meta.type==='epub'?'':'none';
   updateBookmarkIcon();
   
   // Reset areas before trying cache or binary load
@@ -947,11 +954,11 @@ async function openBook(id){
   if(epubBook){ try{ epubBook.destroy() }catch(e){} }
   epubBook=null; epubRendition=null;
   
-  if(['txt','epub'].includes(meta.type)){
+  if(meta.type==='txt'){
     const cached = await getChapterCache(meta);
     if(cached&&cached.chapters&&cached.chapters.length){
       setLoadingProgress(82,'正在读取章节缓存');
-      showTextChapters(cached.chapters, meta, meta.type.toUpperCase());
+      showTextChapters(cached.chapters, meta, 'TXT');
       renderSidebar();
       closeSidebar();
       applyReaderSettings();
@@ -982,6 +989,16 @@ async function openBook(id){
 
 // ─── EPUB ─────────────────────────────────────────────────────────
 async function openEpub(ab, meta){
+  epubMode = 'full';
+  document.getElementById('btnEpubMode').classList.remove('active');
+  document.getElementById('btnEpubMode').title='切换到快速文本模式';
+  await openEpubFull(ab, meta);
+}
+
+async function openEpubQuick(ab, meta){
+  epubMode = 'quick';
+  document.getElementById('btnEpubMode').classList.add('active');
+  document.getElementById('btnEpubMode').title='切换到完整 EPUB 模式';
   epubBook=null; epubRendition=null;
   const cached = await getChapterCache(meta);
   if(cached&&cached.chapters&&cached.chapters.length){
@@ -1023,6 +1040,56 @@ async function openEpub(ab, meta){
   setLoadingProgress(96,'正在显示 EPUB');
   showTextChapters(chapters, meta, 'EPUB');
   toast('已使用 EPUB 快速阅读模式','success');
+}
+
+async function openEpubFull(ab, meta){
+  epubBook=null; epubRendition=null;
+  setLoadingProgress(30,'正在打开完整 EPUB');
+  const blob = new Blob([ab],{type:'application/epub+zip'});
+  const url = URL.createObjectURL(blob);
+  epubBook = ePub(url);
+  const frame = document.getElementById('epubFrame');
+  frame.innerHTML='';
+  frame.style.display='block';
+  document.getElementById('txtArea').style.display='none';
+  
+  epubRendition = epubBook.renderTo(frame, {
+    width:'100%', height:'100%',
+    flow:'paginated', spread:'none'
+  });
+  epubRendition.themes.register('folio',{
+    body:{ 'font-family':'"Noto Serif SC",Georgia,serif','font-size':fsVal+'px','line-height':lhVal,'background':'var(--surface, #fff)','color':'var(--text, #1a1612)','padding':'40px 48px!important','max-width':'680px','margin':'0 auto' },
+    img:{ 'max-width':'100%','height':'auto' }
+  });
+  epubRendition.themes.select('folio');
+  
+  epubRendition.on('relocated', loc=>{
+    const p = typeof loc.start.percentage==='number'
+      ? Math.round(loc.start.percentage*100)
+      : Math.round(meta.prog||0);
+    setProgBar(p);
+    if(currentBook){
+      currentBook.prog=p;
+      currentBook.epubCfi=loc.start.cfi;
+      saveBook(currentBook);
+    }
+  });
+  
+  setLoadingProgress(65,'正在渲染完整 EPUB');
+  const result = await waitWithTimeout(
+    epubRendition.display(meta.epubCfi||undefined).catch(()=> 'display-error'),
+    12000,
+    'timeout'
+  );
+  if(result==='display-error') throw new Error('完整 EPUB 渲染失败');
+  if(result==='timeout'){
+    toast('完整模式加载较慢，可点顶部书本按钮切换快速模式','warn');
+  }
+  setLoadingProgress(96,'正在加载目录');
+  epubBook.ready.then(()=>{
+    const toc = epubBook.navigation.toc||[];
+    renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
+  }).catch(()=>{});
 }
 
 function showTextChapters(chapters, meta, label){
