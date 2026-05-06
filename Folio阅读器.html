@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Folio 阅读器</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+/* ── Reset & Base ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f7f4ef;
+  --surface:#ffffff;
+  --surface2:#f0ece4;
+  --border:#e0d8cc;
+  --text:#1a1612;
+  --text2:#6b6057;
+  --text3:#a09288;
+  --accent:#c0392b;
+  --accent2:#e74c3c;
+  --sidebar:260px;
+  --serif:'Noto Serif SC',Georgia,serif;
+  --sans:'Noto Sans SC','PingFang SC',sans-serif;
+  --radius:10px;
+  --transition:0.2s ease;
+}
+[data-theme="dark"]{
+  --bg:#161412;
+  --surface:#1e1b18;
+  --surface2:#252017;
+  --border:#2e2a24;
+  --text:#e8e0d4;
+  --text2:#a09288;
+  --text3:#665c54;
+}
+[data-theme="sepia"]{
+  --bg:#f2e8d4;
+  --surface:#fdf6e3;
+  --surface2:#e8dcc4;
+  --border:#d4c4a8;
+  --text:#3b2f1e;
+  --text2:#7a6248;
+  --text3:#a8937a;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--sans)}
+button{cursor:pointer;background:none;border:none;color:inherit;font-family:inherit}
+
+/* ── Layout ── */
+.app{display:flex;height:100vh;overflow:hidden}
+
+/* ── Sidebar ── */
+.sidebar{
+  width:var(--sidebar);flex-shrink:0;
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  transition:transform var(--transition);
+  z-index:100;
+}
+.sidebar-head{
+  padding:20px 16px 14px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.logo{
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--serif);font-size:20px;font-weight:600;
+  color:var(--text);letter-spacing:-.5px;margin-bottom:14px;
+}
+.logo span{color:var(--accent);font-size:22px}
+.drive-area{display:flex;flex-direction:column;gap:6px}
+.drive-btn{
+  width:100%;padding:8px 12px;
+  border:1px solid var(--border);border-radius:var(--radius);
+  display:flex;align-items:center;gap:8px;
+  font-size:13px;font-family:var(--sans);
+  color:var(--text2);background:var(--surface2);
+  transition:all var(--transition);
+}
+.drive-btn:hover{border-color:var(--accent);color:var(--text)}
+.drive-btn.connected{background:#e8f5e9;border-color:#81c784;color:#2e7d32}
+[data-theme="dark"] .drive-btn.connected{background:#1b2e1c;border-color:#388e3c;color:#81c784}
+.drive-btn svg{flex-shrink:0}
+.drive-status{font-size:11px;color:var(--text3);text-align:center;padding:2px 0}
+.sidebar-nav{padding:10px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
+.nav-item{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 10px;border-radius:8px;
+  font-size:13.5px;color:var(--text2);
+  transition:all var(--transition);
+}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--surface2);color:var(--text);font-weight:500}
+.nav-item svg{flex-shrink:0;opacity:.7}
+.nav-item.active svg{opacity:1}
+.book-list{flex:1;overflow-y:auto;padding:8px}
+.book-list::-webkit-scrollbar{width:3px}
+.book-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.sl-label{font-size:11px;color:var(--text3);padding:8px 10px 4px;letter-spacing:.06em;text-transform:uppercase}
+.sl-item{
+  display:flex;align-items:center;gap:9px;
+  padding:8px 10px;border-radius:8px;
+  cursor:pointer;transition:background var(--transition);
+}
+.sl-item:hover{background:var(--surface2)}
+.sl-item.active{background:var(--surface2)}
+.sl-cover{
+  width:34px;height:48px;border-radius:4px;
+  flex-shrink:0;display:flex;align-items:center;
+  justify-content:center;font-size:20px;
+  border:1px solid var(--border);background:var(--surface2);
+}
+.sl-info{flex:1;min-width:0}
+.sl-title{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sl-author{font-size:11px;color:var(--text3);margin-top:1px}
+.sl-prog{height:2px;background:var(--border);border-radius:1px;margin-top:5px}
+.sl-prog-fill{height:100%;border-radius:1px;background:var(--accent);transition:width .3s}
+
+/* ── Main ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{
+  height:50px;background:var(--surface);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;
+  padding:0 12px;gap:8px;flex-shrink:0;
+}
+.menu-btn{
+  display:none;padding:6px;border-radius:8px;
+  color:var(--text2);transition:all var(--transition);
+}
+.menu-btn:hover{background:var(--surface2);color:var(--text)}
+.topbar-title{
+  flex:1;font-size:14px;font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.topbar-actions{display:flex;align-items:center;gap:2px}
+.tb-btn{
+  padding:7px;border-radius:8px;
+  color:var(--text2);transition:all var(--transition);
+  display:flex;align-items:center;justify-content:center;
+}
+.tb-btn:hover{background:var(--surface2);color:var(--text)}
+.tb-btn.active{color:var(--accent)}
+
+/* ── Library View ── */
+.view{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.library-view{overflow-y:auto;padding:24px}
+.library-view::-webkit-scrollbar{width:4px}
+.library-view::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.drop-zone{
+  border:2px dashed var(--border);border-radius:14px;
+  padding:36px 24px;text-align:center;
+  cursor:pointer;transition:all var(--transition);margin-bottom:28px;
+  background:var(--surface);
+}
+.drop-zone:hover,.drop-zone.drag-over{
+  border-color:var(--accent);background:var(--surface2);
+}
+.drop-icon{
+  width:52px;height:52px;border-radius:50%;
+  background:var(--surface2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 14px;
+}
+.drop-title{font-size:15px;font-weight:500;margin-bottom:6px}
+.drop-sub{font-size:12.5px;color:var(--text2);margin-bottom:14px;line-height:1.6}
+.drop-formats{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.fmt-badge{
+  font-size:11px;padding:3px 8px;border-radius:20px;
+  background:var(--surface2);border:1px solid var(--border);
+  color:var(--text2);font-weight:500;letter-spacing:.03em;
+}
+.section-hd{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:14px;
+}
+.section-title{font-size:16px;font-weight:600;font-family:var(--serif)}
+.section-count{font-size:12px;color:var(--text3)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:14px;margin-bottom:32px}
+.book-tile{
+  cursor:pointer;border-radius:10px;overflow:hidden;
+  background:var(--surface);border:1px solid var(--border);
+  transition:all var(--transition);
+}
+.book-tile:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
+.tile-cover{
+  height:160px;display:flex;align-items:center;
+  justify-content:center;font-size:46px;
+  position:relative;border-bottom:1px solid var(--border);
+}
+.tile-badge{
+  position:absolute;top:7px;right:7px;
+  font-size:10px;padding:2px 6px;border-radius:10px;
+  font-family:var(--sans);background:var(--accent);color:#fff;
+  font-weight:500;
+}
+.tile-body{padding:9px 9px 11px}
+.tile-title{
+  font-size:12.5px;font-weight:500;margin-bottom:2px;
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+}
+.tile-author{font-size:11px;color:var(--text3)}
+.tile-bar{height:2px;background:var(--border);border-radius:1px;margin-top:8px}
+.tile-fill{height:100%;border-radius:1px;background:var(--accent)}
+.empty-state{text-align:center;padding:60px 24px;color:var(--text2)}
+.empty-state svg{opacity:.3;margin-bottom:12px}
+.empty-state p{font-size:14px}
+
+/* ── Reader View ── */
+.reader-view{display:none;flex:1;flex-direction:column;overflow:hidden}
+.reader-view.active{display:flex}
+.reader-toolbar{
+  padding:8px 14px;border-bottom:1px solid var(--border);
+  background:var(--surface);
+  display:flex;align-items:center;gap:8px;
+  flex-wrap:wrap;flex-shrink:0;
+}
+.rt-group{display:flex;align-items:center;gap:4px}
+.rt-sep{width:1px;height:18px;background:var(--border);margin:0 4px}
+.rt-lbl{font-size:11px;color:var(--text3);min-width:24px;text-align:center}
+.theme-btn{
+  width:24px;height:24px;border-radius:50%;
+  border:2px solid var(--border);cursor:pointer;
+  transition:border-color var(--transition);flex-shrink:0;
+}
+.theme-btn:hover,.theme-btn.active{border-color:var(--accent)}
+.theme-btn.t-light{background:#f7f4ef}
+.theme-btn.t-dark{background:#161412}
+.theme-btn.t-sepia{background:#f2e8d4}
+#epubFrame{
+  flex:1;border:none;background:var(--surface);
+  display:none;
+}
+.txt-area{
+  flex:1;overflow-y:auto;padding:40px 24px;
+  background:var(--surface);
+}
+.txt-area::-webkit-scrollbar{width:4px}
+.txt-area::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.txt-content{
+  max-width:660px;margin:0 auto;
+  font-family:var(--serif);
+  line-height:1.9;color:var(--text);
+}
+.txt-content p{margin-bottom:1.4em;font-size:var(--fs,17px)}
+.txt-content h1,.txt-content h2{
+  font-family:var(--serif);margin-bottom:1.2em;margin-top:1.8em;
+  font-weight:600;color:var(--text);
+}
+.pdf-area{
+  flex:1;overflow-y:auto;background:var(--surface);
+  display:flex;flex-direction:column;align-items:center;
+  padding:16px;gap:12px;
+}
+.pdf-area canvas{
+  max-width:100%;border:1px solid var(--border);
+  border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,.08);
+}
+.reader-footer{
+  padding:10px 16px;border-top:1px solid var(--border);
+  background:var(--surface);
+  display:flex;align-items:center;gap:12px;flex-shrink:0;
+}
+.prog-track{
+  flex:1;height:4px;background:var(--border);border-radius:2px;
+  cursor:pointer;position:relative;
+}
+.prog-thumb{
+  height:100%;border-radius:2px;background:var(--accent);
+  transition:width .2s;pointer-events:none;
+}
+.prog-info{font-size:12px;color:var(--text3);white-space:nowrap;min-width:40px;text-align:right}
+.nav-arrows{display:flex;gap:4px}
+.arr-btn{
+  padding:5px 10px;border-radius:7px;font-size:13px;
+  background:var(--surface2);border:1px solid var(--border);
+  color:var(--text2);transition:all var(--transition);
+}
+.arr-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── Loading Overlay ── */
+.loading-overlay{
+  position:absolute;inset:0;
+  background:rgba(0,0,0,.35);
+  display:none;align-items:center;justify-content:center;
+  z-index:500;backdrop-filter:blur(2px);
+}
+.loading-overlay.show{display:flex}
+.loading-box{
+  background:var(--surface);border-radius:14px;
+  padding:32px 40px;text-align:center;
+  border:1px solid var(--border);
+}
+.spinner{
+  width:36px;height:36px;border:3px solid var(--border);
+  border-top-color:var(--accent);border-radius:50%;
+  animation:spin .8s linear infinite;margin:0 auto 16px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-txt{font-size:14px;color:var(--text2)}
+
+/* ── Toast ── */
+.toast{
+  position:fixed;bottom:20px;right:20px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:11px 16px;
+  font-size:13px;display:flex;align-items:center;gap:8px;
+  box-shadow:0 4px 20px rgba(0,0,0,.12);
+  opacity:0;transform:translateY(6px);
+  transition:all .25s;pointer-events:none;z-index:999;
+  max-width:300px;
+}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.toast-dot.success{background:#4caf50}
+.toast-dot.info{background:#2196f3}
+.toast-dot.warn{background:#ff9800}
+
+/* ── Overlay & Mobile ── */
+.mob-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.45);z-index:90;
+}
+@media(max-width:640px){
+  :root{--sidebar:280px}
+  .sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .mob-overlay.show{display:block}
+  .menu-btn{display:flex}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px}
+  .library-view{padding:14px}
+  .txt-area{padding:20px 14px}
+  .reader-toolbar{gap:5px}
+  .rt-sep{margin:0 2px}
+  .toast{bottom:12px;right:12px;left:12px;max-width:none}
+}
+
+/* ── File input hidden ── */
+#fileInput{display:none}
+
+/* ── Chapters Panel ── */
+.chapters-panel{
+  position:absolute;top:0;right:0;bottom:0;
+  width:260px;background:var(--surface);
+  border-left:1px solid var(--border);
+  transform:translateX(100%);transition:transform var(--transition);
+  z-index:50;display:flex;flex-direction:column;
+  box-shadow:-4px 0 20px rgba(0,0,0,.08);
+}
+.chapters-panel.open{transform:translateX(0)}
+.cp-head{
+  padding:14px 14px 12px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+.cp-title{font-size:14px;font-weight:500}
+.cp-close{padding:5px;border-radius:6px;color:var(--text2)}
+.cp-close:hover{background:var(--surface2)}
+.cp-list{flex:1;overflow-y:auto;padding:8px}
+.cp-item{
+  padding:9px 12px;border-radius:7px;cursor:pointer;
+  font-size:13px;color:var(--text2);transition:all var(--transition);
+  display:flex;align-items:flex-start;gap:8px;
+}
+.cp-item:hover{background:var(--surface2);color:var(--text)}
+.cp-item.active{background:var(--surface2);color:var(--text);font-weight:500}
+.cp-num{font-size:11px;color:var(--text3);min-width:20px;padding-top:1px}
+
+/* ── Search in book ── */
+.search-bar{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 14px;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;
+}
+.search-bar input{
+  flex:1;border:1px solid var(--border);border-radius:8px;
+  padding:7px 12px;font-size:13px;
+  background:var(--surface2);color:var(--text);
+  font-family:var(--sans);outline:none;transition:border-color var(--transition);
+}
+.search-bar input:focus{border-color:var(--accent)}
+.search-bar input::placeholder{color:var(--text3)}
+</style>
+</head>
+<body>
+
+<div class="mob-overlay" id="mobOverlay" onclick="closeSidebar()"></div>
+
+<div class="app">
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <div class="logo"><span>F</span>olio</div>
+      <div class="drive-area">
+        <button class="drive-btn" id="driveBtn" onclick="handleDriveAuth()">
+          <!-- Google Drive icon -->
+          <svg width="18" height="18" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+            <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+            <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+            <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+            <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+            <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+            <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 27h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+          </svg>
+          <span id="driveBtnTxt">连接 Google Drive</span>
+        </button>
+        <div class="drive-status" id="driveStatus"></div>
+      </div>
+    </div>
+
+    <div class="sidebar-nav">
+      <div class="nav-item active" id="navAll" onclick="setNav('all')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        所有书籍
+      </div>
+      <div class="nav-item" id="navRecent" onclick="setNav('recent')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+        最近阅读
+      </div>
+      <div class="nav-item" id="navFav" onclick="setNav('fav')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        收藏书签
+      </div>
+    </div>
+
+    <div class="book-list" id="sidebarList">
+      <div class="sl-label">书库</div>
+      <!-- populated by JS -->
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <div class="main" style="position:relative">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <button class="menu-btn" onclick="openSidebar()" aria-label="菜单">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="topbar-title" id="topbarTitle">Folio 书库</div>
+      <div class="topbar-actions">
+        <!-- Search in book -->
+        <button class="tb-btn" id="btnSearch" onclick="toggleSearch()" title="搜索" style="display:none">
+          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+        <!-- Chapters -->
+        <button class="tb-btn" id="btnChapters" onclick="toggleChapters()" title="目录" style="display:none">
+          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        </button>
+        <!-- Bookmark -->
+        <button class="tb-btn" id="btnBookmark" onclick="toggleBookmark()" title="书签" style="display:none">
+          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" id="bmkIcon"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <!-- Add book -->
+        <button class="tb-btn" onclick="document.getElementById('fileInput').click()" title="添加书籍">
+          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <!-- Back to library -->
+        <button class="tb-btn" id="btnLibrary" onclick="showLibrary()" title="书库" style="display:none">
+          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Search bar (hidden) -->
+    <div class="search-bar" id="searchBar" style="display:none">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="在书中搜索…" oninput="doSearch()" onkeydown="if(event.key==='Escape')toggleSearch()">
+      <button onclick="toggleSearch()" style="color:var(--text3)">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Library View -->
+    <div class="view library-view" id="libraryView">
+      <div class="drop-zone" id="dropZone"
+        onclick="document.getElementById('fileInput').click()"
+        ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <div class="drop-icon">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="drop-title">上传书籍</div>
+        <div class="drop-sub">拖放文件到此处，或点击选择文件<br>连接 Google Drive 后可同步到云端</div>
+        <div class="drop-formats">
+          <span class="fmt-badge">TXT</span>
+          <span class="fmt-badge">EPUB</span>
+          <span class="fmt-badge">PDF</span>
+        </div>
+      </div>
+
+      <div id="libraryContent">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+    <!-- Reader View -->
+    <div class="view reader-view" id="readerView">
+      <!-- Toolbar -->
+      <div class="reader-toolbar">
+        <div class="rt-group">
+          <button class="tb-btn" onclick="fontSize(-1)" title="减小字号">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <span class="rt-lbl" id="fsLbl">17</span>
+          <button class="tb-btn" onclick="fontSize(1)" title="增大字号">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+        <div class="rt-sep"></div>
+        <div class="rt-group">
+          <button class="tb-btn" onclick="lineH(-1)" title="减小行距">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="14" x2="21" y2="14"/></svg>
+          </button>
+          <span class="rt-lbl" id="lhLbl">1.9</span>
+          <button class="tb-btn" onclick="lineH(1)" title="增大行距">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="4" x2="21" y2="4"/><line x1="3" y1="20" x2="21" y2="20"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
+          </button>
+        </div>
+        <div class="rt-sep"></div>
+        <div class="rt-group" style="gap:6px">
+          <button class="theme-btn t-light" onclick="setTheme('')" title="白天"></button>
+          <button class="theme-btn t-sepia" onclick="setTheme('sepia')" title="护眼"></button>
+          <button class="theme-btn t-dark" onclick="setTheme('dark')" title="夜间"></button>
+        </div>
+        <div style="margin-left:auto;font-size:12px;color:var(--text3)" id="readerBookTitle"></div>
+      </div>
+
+      <!-- EPUB frame -->
+      <iframe id="epubFrame" title="EPUB阅读区"></iframe>
+
+      <!-- TXT area -->
+      <div class="txt-area" id="txtArea" onscroll="updateProg()" style="display:none">
+        <div class="txt-content" id="txtContent"></div>
+      </div>
+
+      <!-- PDF area -->
+      <div class="pdf-area" id="pdfArea" style="display:none"></div>
+
+      <!-- Chapters panel -->
+      <div class="chapters-panel" id="chaptersPanel">
+        <div class="cp-head">
+          <span class="cp-title">目录</span>
+          <button class="cp-close" onclick="toggleChapters()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="cp-list" id="cpList"></div>
+      </div>
+
+      <!-- Footer -->
+      <div class="reader-footer">
+        <div class="nav-arrows" id="pdfNav" style="display:none">
+          <button class="arr-btn" onclick="pdfPrev()">‹</button>
+          <span id="pdfPageInfo" style="font-size:12px;color:var(--text3);padding:0 6px;align-self:center"></span>
+          <button class="arr-btn" onclick="pdfNext()">›</button>
+        </div>
+        <div class="prog-track" id="progTrack" onclick="seekProg(event)">
+          <div class="prog-thumb" id="progThumb" style="width:0%"></div>
+        </div>
+        <div class="prog-info" id="progInfo">0%</div>
+      </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="loading-box">
+        <div class="spinner"></div>
+        <div class="loading-txt" id="loadingTxt">正在加载书籍…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <div class="toast-dot" id="toastDot"></div>
+  <span id="toastMsg"></span>
+</div>
+
+<input type="file" id="fileInput" accept=".txt,.epub,.pdf" multiple onchange="handleFiles(this.files)">
+
+<script>
+// ─── State ───────────────────────────────────────────────────────
+const DB_KEY='folio_v2';
+let store = loadStore();
+let currentBook = null;
+let curNav = 'all';
+let chaptersOpen = false;
+let searchOpen = false;
+let bookmarkSet = new Set(store.bookmarks||[]);
+let driveConnected = false;
+let driveToken = null;
+
+// epub.js book instance
+let epubBook = null, epubRendition = null;
+// PDF.js
+let pdfDoc = null, pdfPage = 1, pdfTotal = 0;
+// TXT
+let txtChunks = [], txtChunk = 0;
+
+let fsVal = store.fs||17;
+let lhVal = store.lh||1.9;
+
+function loadStore(){
+  try{ return JSON.parse(localStorage.getItem(DB_KEY)||'{}') }
+  catch(e){ return {} }
+}
+function saveStore(){
+  store.fs = fsVal; store.lh = lhVal;
+  store.bookmarks = [...bookmarkSet];
+  try{ localStorage.setItem(DB_KEY, JSON.stringify(store)) }catch(e){}
+}
+
+// ─── Book DB (IndexedDB for binary, localStorage for meta) ───────
+let idbDB = null;
+function openIDB(){
+  return new Promise((res,rej)=>{
+    const req = indexedDB.open('folioBooks',1);
+    req.onupgradeneeded = e=>{ e.target.result.createObjectStore('files') };
+    req.onsuccess = e=>{ idbDB=e.target.result; res() };
+    req.onerror = ()=>rej();
+  });
+}
+function idbPut(key,val){
+  return new Promise((res,rej)=>{
+    const tx=idbDB.transaction('files','readwrite');
+    tx.objectStore('files').put(val,key);
+    tx.oncomplete=res; tx.onerror=rej;
+  });
+}
+function idbGet(key){
+  return new Promise((res,rej)=>{
+    const tx=idbDB.transaction('files','readonly');
+    const req=tx.objectStore('files').get(key);
+    req.onsuccess=()=>res(req.result); req.onerror=rej;
+  });
+}
+
+// ─── Book meta ───────────────────────────────────────────────────
+function getBooks(){ return store.books||[] }
+function saveBook(meta){ 
+  if(!store.books) store.books=[];
+  const idx=store.books.findIndex(b=>b.id===meta.id);
+  if(idx>=0) store.books[idx]=meta; else store.books.push(meta);
+  saveStore();
+}
+function deleteBook(id){
+  store.books=(store.books||[]).filter(b=>b.id!==id);
+  saveStore();
+  idbPut(id,null); // clear binary
+}
+
+const EMOJIS=['📗','📘','📙','📕','📓','📔','📒','🗒️'];
+function randEmoji(){ return EMOJIS[Math.floor(Math.random()*EMOJIS.length)] }
+const COLORS=['#FFF3E0','#E3F2FD','#F3E5F5','#E8F5E9','#FBE9E7','#E0F7FA','#FFF8E1','#F9FBE7'];
+function randColor(){ return COLORS[Math.floor(Math.random()*COLORS.length)] }
+
+// ─── Render Library ──────────────────────────────────────────────
+function renderLibrary(){
+  let books = getBooks();
+  if(curNav==='recent') books = books.filter(b=>b.lastRead).sort((a,b)=>(b.lastRead||0)-(a.lastRead||0)).slice(0,12);
+  if(curNav==='fav') books = books.filter(b=>bookmarkSet.has(b.id));
+  
+  const el = document.getElementById('libraryContent');
+  if(!books.length){
+    el.innerHTML=`<div class="empty-state">
+      <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <p>${curNav==='all'?'还没有书籍，点击上方上传':curNav==='recent'?'还没有最近阅读记录':'还没有收藏书签'}</p>
+    </div>`;
+    return;
+  }
+  
+  const byType = {};
+  books.forEach(b=>{ (byType[b.type]=byType[b.type]||[]).push(b) });
+  
+  el.innerHTML = `
+    <div class="section-hd">
+      <div class="section-title">${{all:'我的书籍',recent:'最近阅读',fav:'收藏书签'}[curNav]}</div>
+      <div class="section-count">${books.length} 本</div>
+    </div>
+    <div class="grid">
+      ${books.map(b=>`
+        <div class="book-tile" onclick="openBook('${b.id}')">
+          <div class="tile-cover" style="background:${b.color||'#f0ece4'}">
+            <span>${b.emoji||'📖'}</span>
+            ${b.prog>=99?'<span class="tile-badge">已读完</span>':''}
+          </div>
+          <div class="tile-body">
+            <div class="tile-title">${b.title}</div>
+            <div class="tile-author">${b.author||'未知作者'}</div>
+            <div class="tile-bar"><div class="tile-fill" style="width:${b.prog||0}%"></div></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+function renderSidebar(){
+  const books = getBooks().slice(-20).reverse();
+  const el = document.getElementById('sidebarList');
+  el.innerHTML = `<div class="sl-label">书库</div>` + books.map(b=>`
+    <div class="sl-item${currentBook&&currentBook.id===b.id?' active':''}" onclick="openBook('${b.id}')">
+      <div class="sl-cover" style="background:${b.color||'#f0ece4'}">${b.emoji||'📖'}</div>
+      <div class="sl-info">
+        <div class="sl-title">${b.title}</div>
+        <div class="sl-author">${b.type.toUpperCase()}</div>
+        <div class="sl-prog"><div class="sl-prog-fill" style="width:${b.prog||0}%"></div></div>
+      </div>
+    </div>`).join('');
+}
+
+// ─── File Handling ────────────────────────────────────────────────
+async function handleFiles(files){
+  for(const file of files){
+    const ext = file.name.split('.').pop().toLowerCase();
+    if(!['txt','epub','pdf'].includes(ext)){
+      toast('格式不支持，请上传 TXT / EPUB / PDF','warn'); continue;
+    }
+    showLoading('正在导入「'+file.name+'」…');
+    try{
+      const id = 'book_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+      const ab = await file.arrayBuffer();
+      await idbPut(id, ab);
+      
+      let title = file.name.replace(/\.[^.]+$/,'');
+      let author = '';
+      
+      // Extract EPUB metadata
+      if(ext==='epub'){
+        try{
+          const zip = await JSZip.loadAsync(ab);
+          const opfPath = await getOpfPath(zip);
+          if(opfPath){
+            const opf = await zip.file(opfPath).async('text');
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(opf,'application/xml');
+            const t = doc.querySelector('title');
+            const a = doc.querySelector('creator');
+            if(t) title = t.textContent.trim();
+            if(a) author = a.textContent.trim();
+          }
+        }catch(e){}
+      }
+      
+      const meta = { id, title, author, type:ext, emoji:randEmoji(), color:randColor(), prog:0, size:file.size, added:Date.now() };
+      saveBook(meta);
+      
+      // Sync to Drive
+      if(driveConnected && driveToken) syncToDrive(id, ab, meta);
+      
+      hideLoading();
+      toast('「'+title+'」已添加到书库','success');
+      renderLibrary(); renderSidebar();
+    }catch(e){
+      hideLoading(); toast('导入失败：'+e.message,'warn');
+    }
+  }
+}
+
+async function getOpfPath(zip){
+  try{
+    const container = await zip.file('META-INF/container.xml').async('text');
+    const m = container.match(/full-path="([^"]+\.opf)"/);
+    return m?m[1]:null;
+  }catch(e){ return null }
+}
+
+// ─── Open Book ────────────────────────────────────────────────────
+async function openBook(id){
+  const meta = getBooks().find(b=>b.id===id);
+  if(!meta) return;
+  showLoading('正在打开「'+meta.title+'」…');
+  
+  currentBook = meta;
+  meta.lastRead = Date.now();
+  saveBook(meta);
+  
+  // Switch view
+  document.getElementById('libraryView').style.display='none';
+  document.getElementById('readerView').classList.add('active');
+  document.getElementById('topbarTitle').textContent = meta.title;
+  document.getElementById('readerBookTitle').textContent = meta.title;
+  document.getElementById('btnSearch').style.display='';
+  document.getElementById('btnChapters').style.display='';
+  document.getElementById('btnBookmark').style.display='';
+  document.getElementById('btnLibrary').style.display='';
+  updateBookmarkIcon();
+  
+  const ab = await idbGet(id);
+  if(!ab){ hideLoading(); toast('找不到文件数据','warn'); showLibrary(); return; }
+  
+  // Reset areas
+  document.getElementById('epubFrame').style.display='none';
+  document.getElementById('txtArea').style.display='none';
+  document.getElementById('pdfArea').style.display='none';
+  document.getElementById('pdfNav').style.display='none';
+  document.getElementById('cpList').innerHTML='';
+  if(epubBook){ try{ epubBook.destroy() }catch(e){} epubBook=null; }
+  
+  try{
+    if(meta.type==='epub') await openEpub(ab, meta);
+    else if(meta.type==='txt') openTxt(ab, meta);
+    else if(meta.type==='pdf') await openPdf(ab, meta);
+  }catch(e){
+    hideLoading(); toast('打开失败：'+e.message,'warn');
+  }
+  
+  renderSidebar();
+  closeSidebar();
+  applyReaderSettings();
+  hideLoading();
+}
+
+// ─── EPUB ─────────────────────────────────────────────────────────
+async function openEpub(ab, meta){
+  const blob = new Blob([ab],{type:'application/epub+zip'});
+  const url = URL.createObjectURL(blob);
+  epubBook = ePub(url);
+  
+  const frame = document.getElementById('epubFrame');
+  frame.style.display='block';
+  
+  epubRendition = epubBook.renderTo(frame, {
+    width:'100%', height:'100%',
+    flow:'paginated', spread:'none'
+  });
+  
+  // Apply theme to epub
+  epubRendition.themes.register('folio',{
+    body:{ 'font-family':'"Noto Serif SC",Georgia,serif','font-size':fsVal+'px','line-height':lhVal,'background':'var(--surface, #fff)','color':'var(--text, #1a1612)','padding':'40px 48px!important','max-width':'680px','margin':'0 auto' }
+  });
+  epubRendition.themes.select('folio');
+  
+  const prog = (meta.prog||0)/100;
+  await epubBook.ready;
+  
+  // Chapters
+  const toc = epubBook.navigation.toc;
+  renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
+  
+  if(prog>0){
+    const cfi = await epubBook.locations.cfiFromPercentage(prog);
+    epubRendition.display(cfi);
+  } else {
+    epubRendition.display();
+  }
+  
+  epubRendition.on('relocated', loc=>{
+    const p = Math.round(loc.start.percentage*100);
+    setProgBar(p);
+    if(currentBook){ currentBook.prog=p; saveBook(currentBook) }
+  });
+}
+
+// ─── TXT ──────────────────────────────────────────────────────────
+function openTxt(ab, meta){
+  const dec = new TextDecoder('utf-8');
+  let text = dec.decode(ab);
+  
+  // Try GB18030 if garbled
+  if(text.includes('�')){
+    try{
+      const dec2 = new TextDecoder('gb18030');
+      text = dec2.decode(ab);
+    }catch(e){}
+  }
+  
+  // Split into paragraphs and chunk
+  const paras = text.split(/\n+/).filter(p=>p.trim());
+  
+  // Build chapters from headings
+  const chapters = [];
+  let curChapter = {title:'正文',paras:[]};
+  paras.forEach(p=>{
+    if(/^第[零一二三四五六七八九十百千万\d]+[章节回篇卷]/.test(p.trim()) && p.trim().length<60){
+      if(curChapter.paras.length) chapters.push(curChapter);
+      curChapter = {title:p.trim(),paras:[]};
+    } else { curChapter.paras.push(p) }
+  });
+  if(curChapter.paras.length) chapters.push(curChapter);
+  
+  txtChunks = chapters;
+  txtChunk = Math.round((meta.prog||0)/100*(chapters.length-1));
+  
+  renderChapters(chapters.map((c,i)=>({label:c.title,index:i})), (i)=>{ txtChunk=i; renderTxtChunk(); toggleChapters() });
+  
+  document.getElementById('txtArea').style.display='block';
+  renderTxtChunk();
+}
+
+function renderTxtChunk(){
+  const ch = txtChunks[txtChunk];
+  if(!ch) return;
+  const el = document.getElementById('txtContent');
+  el.innerHTML = `<h2>${ch.title}</h2>`+ ch.paras.map(p=>`<p>${escHtml(p)}</p>`).join('');
+  document.getElementById('txtArea').scrollTop=0;
+  const prog = Math.round(txtChunk/(txtChunks.length-1||1)*100);
+  setProgBar(prog);
+  if(currentBook){ currentBook.prog=prog; saveBook(currentBook) }
+  document.getElementById('cpList').querySelectorAll('.cp-item').forEach((el,i)=>el.classList.toggle('active',i===txtChunk));
+  applyReaderSettings();
+}
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+
+// ─── PDF ──────────────────────────────────────────────────────────
+async function openPdf(ab, meta){
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  pdfDoc = await pdfjsLib.getDocument({data:ab}).promise;
+  pdfTotal = pdfDoc.numPages;
+  pdfPage = Math.max(1,Math.round((meta.prog||0)/100*(pdfTotal-1))+1);
+  
+  document.getElementById('pdfArea').style.display='flex';
+  document.getElementById('pdfNav').style.display='flex';
+  
+  // Build outline chapters
+  try{
+    const outline = await pdfDoc.getOutline();
+    if(outline && outline.length){
+      renderChapters(outline.map((o,i)=>({label:o.title,index:i})), ()=>{});
+    }
+  }catch(e){}
+  
+  await renderPdfPage();
+}
+
+async function renderPdfPage(){
+  const area = document.getElementById('pdfArea');
+  area.innerHTML='';
+  const page = await pdfDoc.getPage(pdfPage);
+  const vp = page.getViewport({scale:1});
+  const scale = Math.min((area.clientWidth-32)/vp.width, 2);
+  const viewport = page.getViewport({scale});
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  area.appendChild(canvas);
+  await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+  const prog = Math.round((pdfPage-1)/(pdfTotal-1||1)*100);
+  setProgBar(prog);
+  document.getElementById('pdfPageInfo').textContent=`${pdfPage} / ${pdfTotal}`;
+  if(currentBook){ currentBook.prog=prog; saveBook(currentBook) }
+}
+function pdfNext(){ if(pdfPage<pdfTotal){ pdfPage++; renderPdfPage() } }
+function pdfPrev(){ if(pdfPage>1){ pdfPage--; renderPdfPage() } }
+
+// ─── Chapters Panel ───────────────────────────────────────────────
+function renderChapters(items, onSelect){
+  const el = document.getElementById('cpList');
+  el.innerHTML = items.map((item,i)=>`
+    <div class="cp-item" onclick="onChapterClick(${i})">
+      <span class="cp-num">${i+1}</span>
+      <span>${item.label||item.title||'第'+(i+1)+'章'}</span>
+    </div>`).join('');
+  window._cpItems = items;
+  window._cpOnSelect = onSelect;
+}
+function onChapterClick(i){
+  if(window._cpOnSelect) window._cpOnSelect(window._cpItems[i].href||window._cpItems[i].index);
+}
+function toggleChapters(){
+  chaptersOpen=!chaptersOpen;
+  document.getElementById('chaptersPanel').classList.toggle('open',chaptersOpen);
+}
+
+// ─── Search ───────────────────────────────────────────────────────
+function toggleSearch(){
+  searchOpen=!searchOpen;
+  document.getElementById('searchBar').style.display=searchOpen?'flex':'none';
+  if(searchOpen) document.getElementById('searchInput').focus();
+  else{ document.getElementById('searchInput').value=''; clearSearch() }
+}
+function doSearch(){
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  if(!q||!currentBook||currentBook.type!=='txt') return;
+  const el = document.getElementById('txtContent');
+  el.querySelectorAll('mark').forEach(m=>m.replaceWith(m.textContent));
+  if(!q) return;
+  el.innerHTML = el.innerHTML.replace(new RegExp(escRegex(q),'gi'), m=>`<mark style="background:#ffd54f;color:#333;border-radius:2px">${m}</mark>`);
+  const first = el.querySelector('mark');
+  if(first) first.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function clearSearch(){ if(currentBook&&currentBook.type==='txt') renderTxtChunk() }
+function escRegex(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') }
+
+// ─── Progress ─────────────────────────────────────────────────────
+function updateProg(){
+  const area = document.getElementById('txtArea');
+  const max = area.scrollHeight-area.clientHeight;
+  const pct = max>0?Math.round(area.scrollTop/max*100):0;
+  setProgBar(pct);
+  if(currentBook&&currentBook.type==='txt'){ currentBook.prog=pct; saveBook(currentBook) }
+}
+function setProgBar(pct){
+  document.getElementById('progThumb').style.width=pct+'%';
+  document.getElementById('progInfo').textContent=pct+'%';
+}
+function seekProg(e){
+  if(!currentBook) return;
+  const pct = e.offsetX/e.currentTarget.offsetWidth;
+  if(currentBook.type==='txt'){
+    const idx = Math.round(pct*(txtChunks.length-1));
+    txtChunk=idx; renderTxtChunk();
+  } else if(currentBook.type==='pdf'){
+    pdfPage=Math.max(1,Math.min(pdfTotal,Math.round(pct*(pdfTotal-1))+1));
+    renderPdfPage();
+  } else if(currentBook.type==='epub' && epubBook){
+    epubBook.locations.percentageFromCfi(null).then?null:null;
+    epubRendition&&epubRendition.display(epubBook.locations.cfiFromPercentage(pct));
+  }
+}
+
+// ─── Reader Settings ─────────────────────────────────────────────
+function applyReaderSettings(){
+  document.getElementById('fsLbl').textContent=fsVal;
+  document.getElementById('lhLbl').textContent=lhVal.toFixed(1);
+  const tc=document.getElementById('txtContent');
+  tc.style.fontSize=fsVal+'px';
+  tc.style.lineHeight=lhVal;
+  if(epubRendition){
+    try{
+      epubRendition.themes.override('font-size',fsVal+'px');
+      epubRendition.themes.override('line-height',lhVal);
+    }catch(e){}
+  }
+  saveStore();
+}
+function fontSize(d){ fsVal=Math.min(24,Math.max(13,fsVal+d)); applyReaderSettings() }
+function lineH(d){ lhVal=Math.min(2.6,Math.max(1.3,parseFloat((lhVal+d*0.1).toFixed(1)))); applyReaderSettings() }
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`.t-${t||'light'}`).classList.add('active');
+}
+
+// ─── Bookmark ─────────────────────────────────────────────────────
+function toggleBookmark(){
+  if(!currentBook) return;
+  if(bookmarkSet.has(currentBook.id)){ bookmarkSet.delete(currentBook.id); toast('已移除书签','') }
+  else{ bookmarkSet.add(currentBook.id); toast('已添加书签','success') }
+  updateBookmarkIcon(); saveStore();
+}
+function updateBookmarkIcon(){
+  if(!currentBook) return;
+  const bm = bookmarkSet.has(currentBook.id);
+  document.getElementById('bmkIcon').setAttribute('fill',bm?'currentColor':'none');
+  document.getElementById('btnBookmark').classList.toggle('active',bm);
+}
+
+// ─── Library Nav ─────────────────────────────────────────────────
+function showLibrary(){
+  document.getElementById('libraryView').style.display='';
+  document.getElementById('readerView').classList.remove('active');
+  document.getElementById('topbarTitle').textContent='Folio 书库';
+  document.getElementById('btnSearch').style.display='none';
+  document.getElementById('btnChapters').style.display='none';
+  document.getElementById('btnBookmark').style.display='none';
+  document.getElementById('btnLibrary').style.display='none';
+  document.getElementById('searchBar').style.display='none';
+  searchOpen=false; chaptersOpen=false;
+  document.getElementById('chaptersPanel').classList.remove('open');
+  currentBook=null;
+  if(epubBook){ try{epubBook.destroy()}catch(e){} epubBook=null }
+  renderLibrary(); renderSidebar();
+}
+function setNav(v){
+  curNav=v;
+  ['all','recent','fav'].forEach(n=>document.getElementById('nav'+n.charAt(0).toUpperCase()+n.slice(1)).classList.toggle('active',n===v));
+  renderLibrary();
+}
+
+// ─── Sidebar Mobile ───────────────────────────────────────────────
+function openSidebar(){ document.getElementById('sidebar').classList.add('open'); document.getElementById('mobOverlay').classList.add('show') }
+function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('mobOverlay').classList.remove('show') }
+
+// ─── Drag & Drop ─────────────────────────────────────────────────
+function onDragOver(e){ e.preventDefault(); document.getElementById('dropZone').classList.add('drag-over') }
+function onDragLeave(){ document.getElementById('dropZone').classList.remove('drag-over') }
+function onDrop(e){ e.preventDefault(); onDragLeave(); handleFiles(e.dataTransfer.files) }
+
+// ─── Loading ─────────────────────────────────────────────────────
+function showLoading(txt){ document.getElementById('loadingTxt').textContent=txt||'加载中…'; document.getElementById('loadingOverlay').classList.add('show') }
+function hideLoading(){ document.getElementById('loadingOverlay').classList.remove('show') }
+
+// ─── Toast ───────────────────────────────────────────────────────
+let toastT;
+function toast(msg, type){
+  clearTimeout(toastT);
+  document.getElementById('toastMsg').textContent=msg;
+  document.getElementById('toastDot').className='toast-dot '+(type||'');
+  document.getElementById('toast').classList.add('show');
+  toastT=setTimeout(()=>document.getElementById('toast').classList.remove('show'),2800);
+}
+
+// ─── Google Drive Integration ────────────────────────────────────
+// NOTE: Replace with your actual Google OAuth2 Client ID
+const GOOGLE_CLIENT_ID = '620758146458-6no9mc05e1j2s7f04tcnqrl74n5c2ti1.apps.googleusercontent.com';
+const DRIVE_FOLDER = 'Folio 书库';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+function handleDriveAuth(){
+  if(driveConnected){ disconnectDrive(); return; }
+  
+  // Check if Google API is available
+  if(typeof google==='undefined' || typeof google.accounts==='undefined'){
+    // Load Google Identity Services
+    const s=document.createElement('script');
+    s.src='https://accounts.google.com/gsi/client';
+    s.onload=()=>startDriveAuth();
+    s.onerror=()=>toast('请在 Google Drive 配置说明中填写 Client ID','warn');
+    document.head.appendChild(s);
+  } else { startDriveAuth() }
+}
+
+function startDriveAuth(){
+  if(GOOGLE_CLIENT_ID.startsWith('YOUR_')){
+    // Demo mode without real auth
+    driveConnected=true;
+    updateDriveUI();
+    toast('演示模式：请配置真实的 Google Client ID 以启用同步','info');
+    return;
+  }
+  google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: SCOPES,
+    callback: (res)=>{
+      if(res.error){ toast('授权失败：'+res.error,'warn'); return; }
+      driveToken=res.access_token;
+      driveConnected=true;
+      updateDriveUI();
+      toast('Google Drive 已连接，书库将自动同步','success');
+      syncAllToDrive();
+    }
+  }).requestAccessToken();
+}
+
+function disconnectDrive(){
+  driveConnected=false; driveToken=null;
+  updateDriveUI();
+  toast('已断开 Google Drive','');
+}
+
+function updateDriveUI(){
+  const btn=document.getElementById('driveBtn');
+  const txt=document.getElementById('driveBtnTxt');
+  const status=document.getElementById('driveStatus');
+  btn.classList.toggle('connected',driveConnected);
+  txt.textContent=driveConnected?'已连接 Google Drive':'连接 Google Drive';
+  status.textContent=driveConnected?'书库已启用云端同步':'';
+}
+
+async function syncToDrive(id, ab, meta){
+  if(!driveToken) return;
+  try{
+    // Create or find Folio folder
+    let folderId = store.driveFolderId;
+    if(!folderId){
+      const res = await gFetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+encodeURIComponent(DRIVE_FOLDER)+'%22+and+mimeType%3D%22application%2Fvnd.google-apps.folder%22+and+trashed%3Dfalse',{method:'GET'});
+      const data = await res.json();
+      if(data.files&&data.files.length){ folderId=data.files[0].id }
+      else{
+        const cr=await gFetch('https://www.googleapis.com/drive/v3/files',{method:'POST',body:JSON.stringify({name:DRIVE_FOLDER,mimeType:'application/vnd.google-apps.folder'})});
+        const cd=await cr.json(); folderId=cd.id;
+      }
+      store.driveFolderId=folderId; saveStore();
+    }
+    // Upload file
+    const form=new FormData();
+    form.append('metadata',new Blob([JSON.stringify({name:meta.title+'.'+meta.type,parents:[folderId]})],{type:'application/json'}));
+    form.append('file',new Blob([ab]));
+    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+driveToken},body:form});
+    toast('「'+meta.title+'」已同步到 Drive','success');
+  }catch(e){ console.error('Drive sync error',e) }
+}
+
+async function syncAllToDrive(){
+  if(!driveToken) return;
+  const books=getBooks();
+  for(const meta of books){
+    const ab=await idbGet(meta.id);
+    if(ab) await syncToDrive(meta.id,ab,meta);
+  }
+}
+
+function gFetch(url,opts={}){
+  return fetch(url,{...opts,headers:{...opts.headers,'Authorization':'Bearer '+driveToken,'Content-Type':'application/json'}});
+}
+
+// ─── Init ────────────────────────────────────────────────────────
+openIDB().then(()=>{
+  renderLibrary();
+  renderSidebar();
+  // Set default theme button active
+  document.querySelector('.t-light').classList.add('active');
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT') return;
+  if(e.key==='ArrowRight'&&currentBook?.type==='pdf') pdfNext();
+  if(e.key==='ArrowLeft'&&currentBook?.type==='pdf') pdfPrev();
+  if(e.key==='ArrowRight'&&currentBook?.type==='epub') epubRendition&&epubRendition.next();
+  if(e.key==='ArrowLeft'&&currentBook?.type==='epub') epubRendition&&epubRendition.prev();
+  if(e.key==='Escape'){ if(chaptersOpen)toggleChapters(); if(searchOpen)toggleSearch(); }
+  if((e.ctrlKey||e.metaKey)&&e.key==='f'&&currentBook){ e.preventDefault(); toggleSearch() }
+});
+</script>
+</body>
+</html>
