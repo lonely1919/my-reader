@@ -674,6 +674,7 @@ function saveStore(){
 
 // ─── Book DB (IndexedDB for binary, localStorage for meta) ───────
 let idbDB = null;
+const CHAPTER_CACHE_VERSION = 3;
 function openIDB(){
   return new Promise((res,rej)=>{
     const req = indexedDB.open('folioBooks',1);
@@ -703,6 +704,28 @@ function idbDelete(key){
     tx.oncomplete=res; tx.onerror=rej;
   });
 }
+function idbDeletePrefix(prefix){
+  return new Promise((res,rej)=>{
+    const tx=idbDB.transaction('files','readwrite');
+    const storeObj=tx.objectStore('files');
+    const req=storeObj.openCursor();
+    req.onsuccess=e=>{
+      const cur=e.target.result;
+      if(cur){
+        if(String(cur.key).startsWith(prefix)) cur.delete();
+        cur.continue();
+      }
+    };
+    tx.oncomplete=res; tx.onerror=rej;
+  });
+}
+function cacheKey(meta){ return `cache_${meta.id}_${CHAPTER_CACHE_VERSION}_${meta.type}_${meta.size||0}` }
+async function getChapterCache(meta){
+  try{ return await idbGet(cacheKey(meta)) }catch(e){ return null }
+}
+async function saveChapterCache(meta, chapters){
+  try{ await idbPut(cacheKey(meta), {chapters}) }catch(e){}
+}
 
 // ─── Book meta ───────────────────────────────────────────────────
 function getBooks(){ return store.books||[] }
@@ -717,7 +740,7 @@ function deleteBook(id){
   bookmarkSet.delete(id);
   if(currentBook&&currentBook.id===id) currentBook=null;
   saveStore();
-  return idbDelete(id);
+  return Promise.all([idbDelete(id), idbDeletePrefix(`cache_${id}_`).catch(()=>{})]);
 }
 
 async function removeBook(id, e){
@@ -915,12 +938,7 @@ async function openBook(id){
   document.getElementById('btnLibrary').style.display='';
   updateBookmarkIcon();
   
-  setLoadingProgress(12,'正在读取本地文件');
-  const ab = await idbGet(id);
-  if(!ab){ hideLoading(); toast('找不到文件数据','warn'); showLibrary(); return; }
-  setLoadingProgress(22,'正在准备阅读器');
-  
-  // Reset areas
+  // Reset areas before trying cache or binary load
   document.getElementById('epubFrame').style.display='none';
   document.getElementById('txtArea').style.display='none';
   document.getElementById('pdfArea').style.display='none';
@@ -929,9 +947,27 @@ async function openBook(id){
   if(epubBook){ try{ epubBook.destroy() }catch(e){} }
   epubBook=null; epubRendition=null;
   
+  if(['txt','epub'].includes(meta.type)){
+    const cached = await getChapterCache(meta);
+    if(cached&&cached.chapters&&cached.chapters.length){
+      setLoadingProgress(82,'正在读取章节缓存');
+      showTextChapters(cached.chapters, meta, meta.type.toUpperCase());
+      renderSidebar();
+      closeSidebar();
+      applyReaderSettings();
+      hideLoading();
+      return;
+    }
+  }
+  
+  setLoadingProgress(12,'正在读取本地文件');
+  const ab = await idbGet(id);
+  if(!ab){ hideLoading(); toast('找不到文件数据','warn'); showLibrary(); return; }
+  setLoadingProgress(22,'正在准备阅读器');
+  
   try{
     if(meta.type==='epub') await openEpub(ab, meta);
-    else if(meta.type==='txt'){ setLoadingProgress(60,'正在解析 TXT'); openTxt(ab, meta); }
+    else if(meta.type==='txt'){ setLoadingProgress(60,'正在解析 TXT'); await openTxt(ab, meta); }
     else if(meta.type==='pdf'){ setLoadingProgress(45,'正在解析 PDF'); await openPdf(ab, meta); }
   }catch(e){
     hideLoading(); toast('打开失败：'+e.message,'warn');
@@ -947,6 +983,12 @@ async function openBook(id){
 // ─── EPUB ─────────────────────────────────────────────────────────
 async function openEpub(ab, meta){
   epubBook=null; epubRendition=null;
+  const cached = await getChapterCache(meta);
+  if(cached&&cached.chapters&&cached.chapters.length){
+    setLoadingProgress(82,'正在读取章节缓存');
+    showTextChapters(cached.chapters, meta, 'EPUB');
+    return;
+  }
   setLoadingProgress(30,'正在解压 EPUB');
   const zip = await JSZip.loadAsync(ab);
   setLoadingProgress(45,'正在读取 EPUB 目录');
@@ -977,14 +1019,20 @@ async function openEpub(ab, meta){
   }
   if(!chapters.length) throw new Error('没有提取到可阅读文本');
   
+  await saveChapterCache(meta, chapters);
+  setLoadingProgress(96,'正在显示 EPUB');
+  showTextChapters(chapters, meta, 'EPUB');
+  toast('已使用 EPUB 快速阅读模式','success');
+}
+
+function showTextChapters(chapters, meta, label){
   txtChunks = chapters;
   txtChunk = Math.max(0,Math.min(chapters.length-1,Math.round((meta.prog||0)/100*(chapters.length-1))));
   renderChapters(chapters.map((c,i)=>({label:c.title,index:i})), (i)=>{ txtChunk=i; renderTxtChunk(); toggleChapters() });
   document.getElementById('txtArea').style.display='block';
   document.getElementById('epubFrame').style.display='none';
-  setLoadingProgress(96,'正在显示 EPUB');
+  if(label) document.getElementById('readerBookTitle').textContent = `${meta.title} · ${label} 快速模式`;
   renderTxtChunk();
-  toast('已使用 EPUB 快速阅读模式','success');
 }
 
 function epubHtmlToChapter(html, index){
@@ -994,11 +1042,15 @@ function epubHtmlToChapter(html, index){
   const heading = doc.querySelector('h1,h2,h3,title');
   if(heading) title = heading.textContent.trim();
   if(!title) title = '第 '+(index+1)+' 节';
-  const nodes = doc.body ? doc.body.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,div') : [];
+  const nodes = doc.body ? doc.body.querySelectorAll('h1,h2,h3,h4,p,li,blockquote') : [];
   const paras = [];
+  let last = '';
   nodes.forEach(node=>{
     const text = node.textContent.replace(/\s+/g,' ').trim();
-    if(text && text!==title && text.length>1) paras.push(text);
+    if(text && text!==title && text!==last && text.length>1){
+      paras.push(text);
+      last = text;
+    }
   });
   if(!paras.length && doc.body){
     const text = doc.body.textContent.replace(/\s+/g,' ').trim();
@@ -1008,7 +1060,13 @@ function epubHtmlToChapter(html, index){
 }
 
 // ─── TXT ──────────────────────────────────────────────────────────
-function openTxt(ab, meta){
+async function openTxt(ab, meta){
+  const cached = await getChapterCache(meta);
+  if(cached&&cached.chapters&&cached.chapters.length){
+    setLoadingProgress(88,'正在读取 TXT 缓存');
+    showTextChapters(cached.chapters, meta, 'TXT');
+    return;
+  }
   const dec = new TextDecoder('utf-8');
   let text = dec.decode(ab);
   
@@ -1034,13 +1092,8 @@ function openTxt(ab, meta){
   });
   if(curChapter.paras.length) chapters.push(curChapter);
   
-  txtChunks = chapters;
-  txtChunk = Math.round((meta.prog||0)/100*(chapters.length-1));
-  
-  renderChapters(chapters.map((c,i)=>({label:c.title,index:i})), (i)=>{ txtChunk=i; renderTxtChunk(); toggleChapters() });
-  
-  document.getElementById('txtArea').style.display='block';
-  renderTxtChunk();
+  await saveChapterCache(meta, chapters);
+  showTextChapters(chapters, meta, 'TXT');
 }
 
 function renderTxtChunk(){
