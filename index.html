@@ -290,6 +290,7 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
   line-height:1.9;color:var(--text);
 }
 .txt-content p{margin-bottom:1.4em;font-size:var(--fs,17px)}
+.txt-content img{max-width:100%;height:auto;display:block;margin:1.2em auto;border-radius:4px}
 .txt-content h1,.txt-content h2{
   font-family:var(--serif);margin-bottom:1.2em;margin-top:1.8em;
   font-weight:600;color:var(--text);
@@ -658,6 +659,7 @@ let driveUser = store.driveUser||null;
 
 // epub.js book instance
 let epubBook = null, epubRendition = null, epubObjectUrl = null;
+let lazyEpub = null, lazyBlobUrls = [];
 // PDF.js
 let pdfDoc = null, pdfPage = 1, pdfTotal = 0;
 // TXT
@@ -830,12 +832,18 @@ function renderSidebar(){
 // ─── File Handling ────────────────────────────────────────────────
 const EPUB_META_LIMIT = 25 * 1024 * 1024;
 const EPUB_QUICK_LIMIT = 45 * 1024 * 1024;
+const EPUB_LARGE_LIMIT = 80 * 1024 * 1024;
 function nextFrame(){ return new Promise(r=>requestAnimationFrame(()=>r())) }
 function waitWithTimeout(promise, ms, fallback){
   return Promise.race([
     promise,
     new Promise(res=>setTimeout(()=>res(fallback),ms))
   ]);
+}
+function cleanupLazyEpub(){
+  lazyBlobUrls.forEach(url=>URL.revokeObjectURL(url));
+  lazyBlobUrls = [];
+  lazyEpub = null;
 }
 function cleanupEpub(){
   if(epubBook){ try{ epubBook.destroy() }catch(e){} }
@@ -844,8 +852,10 @@ function cleanupEpub(){
     URL.revokeObjectURL(epubObjectUrl);
     epubObjectUrl=null;
   }
+  cleanupLazyEpub();
 }
-function isLargeEpub(meta){ return meta && meta.type==='epub' && (meta.size||0)>EPUB_QUICK_LIMIT }
+function isQuickLimitedEpub(meta){ return meta && meta.type==='epub' && (meta.size||0)>EPUB_QUICK_LIMIT }
+function isLargeEpub(meta){ return meta && meta.type==='epub' && (meta.size||0)>EPUB_LARGE_LIMIT }
 function dirname(path){
   const i = path.lastIndexOf('/');
   return i>=0 ? path.slice(0,i+1) : '';
@@ -999,16 +1009,24 @@ async function openBook(id){
 
 // ─── EPUB ─────────────────────────────────────────────────────────
 async function openEpub(ab, meta){
+  if(isLargeEpub(meta)){
+    await openEpubLazy(ab, meta);
+    return;
+  }
   epubMode = 'full';
   const modeBtn = document.getElementById('btnEpubMode');
   modeBtn.classList.remove('active');
-  modeBtn.title = isLargeEpub(meta) ? '大 EPUB 已使用完整模式，避免全书解压卡顿' : '切换到快速文本模式';
+  modeBtn.title = isQuickLimitedEpub(meta) ? '较大 EPUB 已使用完整模式，避免全书解压卡顿' : '切换到快速文本模式';
   await openEpubFull(ab, meta);
 }
 
 async function toggleEpubMode(){
   if(!currentBook || currentBook.type!=='epub') return;
-  if(epubMode==='full' && isLargeEpub(currentBook)){
+  if(epubMode==='lazy'){
+    toast('这本 EPUB 较大，已使用按章节读取模式','info');
+    return;
+  }
+  if(epubMode==='full' && isQuickLimitedEpub(currentBook)){
     toast('这本 EPUB 较大，已保持完整模式以避免全书解压卡顿','warn');
     return;
   }
@@ -1027,7 +1045,7 @@ async function toggleEpubMode(){
 }
 
 async function openEpubQuick(ab, meta){
-  if(isLargeEpub(meta)) throw new Error('大 EPUB 不建议快速提取全文，请使用完整模式阅读');
+  if(isQuickLimitedEpub(meta)) throw new Error('较大 EPUB 不建议快速提取全文，请使用完整模式阅读');
   epubMode = 'quick';
   document.getElementById('btnEpubMode').classList.add('active');
   document.getElementById('btnEpubMode').title='切换到完整 EPUB 模式';
@@ -1078,7 +1096,7 @@ async function openEpubFull(ab, meta){
   cleanupEpub();
   epubMode = 'full';
   document.getElementById('btnEpubMode').classList.remove('active');
-  document.getElementById('btnEpubMode').title = isLargeEpub(meta) ? '大 EPUB 已使用完整模式，避免全书解压卡顿' : '切换到快速文本模式';
+  document.getElementById('btnEpubMode').title = isQuickLimitedEpub(meta) ? '较大 EPUB 已使用完整模式，避免全书解压卡顿' : '切换到快速文本模式';
   setLoadingProgress(30,'正在打开完整 EPUB');
   const blob = new Blob([ab],{type:'application/epub+zip'});
   epubObjectUrl = URL.createObjectURL(blob);
@@ -1126,6 +1144,133 @@ async function openEpubFull(ab, meta){
     renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
   }).catch(()=>{});
 }
+
+async function openEpubLazy(ab, meta){
+  cleanupEpub();
+  epubMode = 'lazy';
+  const modeBtn = document.getElementById('btnEpubMode');
+  modeBtn.classList.add('active');
+  modeBtn.title = '大书模式：按章节读取，避免一次性解析整本 EPUB';
+  setLoadingProgress(30,'正在读取 EPUB 结构');
+  const zip = await JSZip.loadAsync(ab);
+  const opfPath = await getOpfPath(zip);
+  if(!opfPath) throw new Error('找不到 EPUB 目录文件');
+  const opfText = await zip.file(opfPath).async('text');
+  const doc = new DOMParser().parseFromString(opfText,'application/xml');
+  const manifest = {};
+  doc.querySelectorAll('manifest item').forEach(item=>{
+    const id = item.getAttribute('id');
+    if(!id) return;
+    manifest[id] = {
+      path: resolvePath(opfPath,item.getAttribute('href')||''),
+      mediaType: item.getAttribute('media-type')||''
+    };
+  });
+  const spine = [...doc.querySelectorAll('spine itemref')]
+    .map(item=>manifest[item.getAttribute('idref')])
+    .filter(Boolean);
+  if(!spine.length) throw new Error('EPUB 没有可读取的正文');
+  lazyEpub = {zip, meta, spine, index:0};
+  renderChapters(spine.map((item,i)=>({label:chapterLabel(item.path,i),index:i})), (i)=>{ renderLazyEpubChapter(i); toggleChapters() });
+  document.getElementById('txtArea').style.display='block';
+  document.getElementById('epubFrame').style.display='none';
+  document.getElementById('pdfArea').style.display='none';
+  document.getElementById('pdfNav').style.display='none';
+  document.getElementById('readerBookTitle').textContent = meta.title + ' · 大书模式';
+  setLoadingProgress(65,'正在读取当前章节');
+  const start = Math.max(0,Math.min(spine.length-1,Math.round((meta.prog||0)/100*(spine.length-1))));
+  await renderLazyEpubChapter(start);
+  toast('已使用大书模式：按章节读取 EPUB','success');
+}
+
+function safeDecode(s){
+  try{ return decodeURIComponent(s) }catch(e){ return s }
+}
+function chapterLabel(path, index){
+  const name = safeDecode((path||'').split('/').pop()||'').replace(/\.[^.]+$/,'');
+  return name || ('第 '+(index+1)+' 章');
+}
+function zipFile(zip, path){
+  if(!path) return null;
+  const plain = path.split('#')[0].replace(/^\/+/, '');
+  return zip.file(plain) || zip.file(safeDecode(plain));
+}
+function mimeFromPath(path){
+  const ext = (path.split('.').pop()||'').toLowerCase();
+  if(ext==='jpg'||ext==='jpeg') return 'image/jpeg';
+  if(ext==='png') return 'image/png';
+  if(ext==='gif') return 'image/gif';
+  if(ext==='webp') return 'image/webp';
+  if(ext==='svg') return 'image/svg+xml';
+  return 'application/octet-stream';
+}
+async function blobUrlFromZip(path, mediaType){
+  const file = zipFile(lazyEpub.zip,path);
+  if(!file) return '';
+  const blob = await file.async('blob');
+  const typed = blob.type ? blob : new Blob([blob],{type:mediaType||mimeFromPath(path)});
+  const url = URL.createObjectURL(typed);
+  lazyBlobUrls.push(url);
+  return url;
+}
+async function renderLazyEpubChapter(index){
+  if(!lazyEpub) return;
+  lazyBlobUrls.forEach(url=>URL.revokeObjectURL(url));
+  lazyBlobUrls = [];
+  index = Math.max(0,Math.min(lazyEpub.spine.length-1,index));
+  lazyEpub.index = index;
+  const item = lazyEpub.spine[index];
+  const file = zipFile(lazyEpub.zip,item.path);
+  if(!file) throw new Error('找不到当前章节文件');
+  const html = await file.async('text');
+  const doc = new DOMParser().parseFromString(html,'text/html');
+  doc.querySelectorAll('script,style,nav,svg').forEach(n=>n.remove());
+  const title = (doc.querySelector('h1,h2,h3,title')?.textContent||chapterLabel(item.path,index)).trim();
+  const content = document.getElementById('txtContent');
+  content.innerHTML = '';
+  const h = document.createElement('h2');
+  h.textContent = title;
+  content.appendChild(h);
+  const nodes = doc.body ? [...doc.body.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,pre,img')] : [];
+  for(const node of nodes){
+    if(node.tagName==='IMG'){
+      const src = node.getAttribute('src')||node.getAttribute('data-src')||'';
+      const img = document.createElement('img');
+      img.alt = node.getAttribute('alt')||'';
+      if(/^data:/i.test(src)){
+        img.src = src;
+        content.appendChild(img);
+        continue;
+      }
+      const imgPath = resolvePath(item.path,src);
+      const url = await blobUrlFromZip(imgPath,node.getAttribute('type')||'');
+      if(url){
+        img.src = url;
+        content.appendChild(img);
+      }
+      continue;
+    }
+    const value = node.textContent.replace(/\s+/g,' ').trim();
+    if(!value || value===title) continue;
+    const el = document.createElement(/^H[1-4]$/.test(node.tagName)?'h2':'p');
+    el.textContent = node.tagName==='LI' ? '- '+value : value;
+    content.appendChild(el);
+  }
+  if(content.children.length<=1 && doc.body){
+    const p = document.createElement('p');
+    p.textContent = doc.body.textContent.replace(/\s+/g,' ').trim();
+    content.appendChild(p);
+  }
+  document.getElementById('txtArea').scrollTop=0;
+  document.getElementById('cpList').querySelectorAll('.cp-item').forEach((el,i)=>el.classList.toggle('active',i===index));
+  const prog = Math.round(index/(lazyEpub.spine.length-1||1)*100);
+  setProgBar(prog);
+  if(currentBook){ currentBook.prog=prog; saveBook(currentBook) }
+  document.getElementById('readerBookTitle').textContent = currentBook.title + ' · 大书模式 · ' + title;
+  applyReaderSettings();
+}
+function lazyNext(){ if(lazyEpub&&lazyEpub.index<lazyEpub.spine.length-1) renderLazyEpubChapter(lazyEpub.index+1) }
+function lazyPrev(){ if(lazyEpub&&lazyEpub.index>0) renderLazyEpubChapter(lazyEpub.index-1) }
 
 function showTextChapters(chapters, meta, label){
   txtChunks = chapters;
@@ -1296,7 +1441,10 @@ function doSearch(){
   const first = el.querySelector('mark');
   if(first) first.scrollIntoView({behavior:'smooth',block:'center'});
 }
-function clearSearch(){ if(currentBook&&['txt','epub'].includes(currentBook.type)) renderTxtChunk() }
+function clearSearch(){
+  if(currentBook?.type==='epub'&&epubMode==='lazy') renderLazyEpubChapter(lazyEpub?.index||0);
+  else if(currentBook&&['txt','epub'].includes(currentBook.type)) renderTxtChunk();
+}
 function escRegex(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') }
 
 // ─── Progress ─────────────────────────────────────────────────────
@@ -1314,7 +1462,9 @@ function setProgBar(pct){
 function seekProg(e){
   if(!currentBook) return;
   const pct = e.offsetX/e.currentTarget.offsetWidth;
-  if(currentBook.type==='txt'||currentBook.type==='epub'){
+  if(currentBook.type==='epub'&&epubMode==='lazy'&&lazyEpub){
+    renderLazyEpubChapter(Math.round(pct*(lazyEpub.spine.length-1)));
+  } else if(currentBook.type==='txt'||currentBook.type==='epub'){
     const idx = Math.round(pct*(txtChunks.length-1));
     txtChunk=idx; renderTxtChunk();
   } else if(currentBook.type==='pdf'){
@@ -1585,8 +1735,10 @@ document.addEventListener('keydown', e=>{
   if(e.key==='ArrowRight'&&currentBook?.type==='pdf') pdfNext();
   if(e.key==='ArrowLeft'&&currentBook?.type==='pdf') pdfPrev();
   if(e.key==='ArrowRight'&&currentBook?.type==='epub'&&epubMode==='full'&&epubRendition) epubRendition.next();
+  else if(e.key==='ArrowRight'&&currentBook?.type==='epub'&&epubMode==='lazy') lazyNext();
   else if(e.key==='ArrowRight'&&(currentBook?.type==='epub'||currentBook?.type==='txt')) textNext();
   if(e.key==='ArrowLeft'&&currentBook?.type==='epub'&&epubMode==='full'&&epubRendition) epubRendition.prev();
+  else if(e.key==='ArrowLeft'&&currentBook?.type==='epub'&&epubMode==='lazy') lazyPrev();
   else if(e.key==='ArrowLeft'&&(currentBook?.type==='epub'||currentBook?.type==='txt')) textPrev();
   if(e.key==='Escape'){ if(chaptersOpen)toggleChapters(); if(searchOpen)toggleSearch(); }
   if((e.ctrlKey||e.metaKey)&&e.key==='f'&&currentBook){ e.preventDefault(); toggleSearch() }
