@@ -86,6 +86,23 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
 [data-theme="dark"] .drive-btn.connected{background:#1b2e1c;border-color:#388e3c;color:#81c784}
 .drive-btn svg{flex-shrink:0}
 .drive-status{font-size:11px;color:var(--text3);text-align:center;padding:2px 0}
+.account-card{
+  display:none;align-items:center;gap:8px;
+  padding:8px;border:1px solid var(--border);border-radius:8px;
+  background:var(--surface2);min-width:0;
+}
+.account-card.show{display:flex}
+.account-avatar{
+  width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--accent);color:white;font-size:12px;font-weight:600;
+  flex-shrink:0;overflow:hidden;
+}
+.account-avatar img{width:100%;height:100%;object-fit:cover}
+.account-meta{min-width:0;flex:1}
+.account-name,.account-email{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account-name{font-size:12px;font-weight:600;color:var(--text)}
+.account-email{font-size:11px;color:var(--text3);margin-top:1px}
 .sidebar-nav{padding:10px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
 .nav-item{
   display:flex;align-items:center;gap:8px;
@@ -408,6 +425,13 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
           </svg>
           <span id="driveBtnTxt">连接 Google Drive</span>
         </button>
+        <div class="account-card" id="accountCard" title="当前账号">
+          <div class="account-avatar" id="accountAvatar">G</div>
+          <div class="account-meta">
+            <div class="account-name" id="accountName">Google 账号</div>
+            <div class="account-email" id="accountEmail"></div>
+          </div>
+        </div>
         <div class="drive-status" id="driveStatus"></div>
       </div>
     </div>
@@ -594,6 +618,7 @@ let searchOpen = false;
 let bookmarkSet = new Set(store.bookmarks||[]);
 let driveConnected = false;
 let driveToken = null;
+let driveUser = store.driveUser||null;
 
 // epub.js book instance
 let epubBook = null, epubRendition = null;
@@ -612,6 +637,7 @@ function loadStore(){
 function saveStore(){
   store.fs = fsVal; store.lh = lhVal;
   store.bookmarks = [...bookmarkSet];
+  store.driveUser = driveUser;
   try{ localStorage.setItem(DB_KEY, JSON.stringify(store)) }catch(e){}
 }
 
@@ -714,6 +740,9 @@ function renderSidebar(){
 }
 
 // ─── File Handling ────────────────────────────────────────────────
+const EPUB_META_LIMIT = 25 * 1024 * 1024;
+function nextFrame(){ return new Promise(r=>requestAnimationFrame(()=>r())) }
+
 async function handleFiles(files){
   for(const file of files){
     const ext = file.name.split('.').pop().toLowerCase();
@@ -721,6 +750,7 @@ async function handleFiles(files){
       toast('格式不支持，请上传 TXT / EPUB / PDF','warn'); continue;
     }
     showLoading('正在导入「'+file.name+'」…');
+    await nextFrame();
     try{
       const id = 'book_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
       const ab = await file.arrayBuffer();
@@ -730,7 +760,7 @@ async function handleFiles(files){
       let author = '';
       
       // Extract EPUB metadata
-      if(ext==='epub'){
+      if(ext==='epub' && file.size<=EPUB_META_LIMIT){
         try{
           const zip = await JSZip.loadAsync(ab);
           const opfPath = await getOpfPath(zip);
@@ -835,24 +865,24 @@ async function openEpub(ab, meta){
   });
   epubRendition.themes.select('folio');
   
-  const prog = (meta.prog||0)/100;
   await epubBook.ready;
   
   // Chapters
   const toc = epubBook.navigation.toc;
   renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
   
-  if(prog>0){
-    const cfi = await epubBook.locations.cfiFromPercentage(prog);
-    epubRendition.display(cfi);
-  } else {
-    epubRendition.display();
-  }
+  await epubRendition.display(meta.epubCfi||undefined);
   
   epubRendition.on('relocated', loc=>{
-    const p = Math.round(loc.start.percentage*100);
+    const p = typeof loc.start.percentage==='number'
+      ? Math.round(loc.start.percentage*100)
+      : Math.round(meta.prog||0);
     setProgBar(p);
-    if(currentBook){ currentBook.prog=p; saveBook(currentBook) }
+    if(currentBook){
+      currentBook.prog=p;
+      currentBook.epubCfi=loc.start.cfi;
+      saveBook(currentBook);
+    }
   });
 }
 
@@ -1009,8 +1039,9 @@ function seekProg(e){
     pdfPage=Math.max(1,Math.min(pdfTotal,Math.round(pct*(pdfTotal-1))+1));
     renderPdfPage();
   } else if(currentBook.type==='epub' && epubBook){
-    epubBook.locations.percentageFromCfi(null).then?null:null;
-    epubRendition&&epubRendition.display(epubBook.locations.cfiFromPercentage(pct));
+    const cfi = epubBook.locations && epubBook.locations.cfiFromPercentage(pct);
+    if(cfi) epubRendition&&epubRendition.display(cfi);
+    else toast('EPUB 正在使用快速模式，请通过翻页继续阅读','info');
   }
 }
 
@@ -1100,7 +1131,7 @@ function toast(msg, type){
 // NOTE: Replace with your actual Google OAuth2 Client ID
 const GOOGLE_CLIENT_ID = '620758146458-6no9mc05e1j2s7f04tcnqrl74n5c2ti1.apps.googleusercontent.com';
 const DRIVE_FOLDER = 'Folio 书库';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file';
 
 function handleDriveAuth(){
   if(driveConnected){ disconnectDrive(); return; }
@@ -1132,6 +1163,7 @@ function startDriveAuth(){
       driveToken=res.access_token;
       driveConnected=true;
       updateDriveUI();
+      loadDriveUser();
       toast('Google Drive 已连接，书库将自动同步','success');
       syncAllToDrive();
     }
@@ -1140,6 +1172,7 @@ function startDriveAuth(){
 
 function disconnectDrive(){
   driveConnected=false; driveToken=null;
+  driveUser=null; saveStore();
   updateDriveUI();
   toast('已断开 Google Drive','');
 }
@@ -1148,9 +1181,45 @@ function updateDriveUI(){
   const btn=document.getElementById('driveBtn');
   const txt=document.getElementById('driveBtnTxt');
   const status=document.getElementById('driveStatus');
+  const card=document.getElementById('accountCard');
+  const avatar=document.getElementById('accountAvatar');
+  const name=document.getElementById('accountName');
+  const email=document.getElementById('accountEmail');
   btn.classList.toggle('connected',driveConnected);
   txt.textContent=driveConnected?'已连接 Google Drive':'连接 Google Drive';
   status.textContent=driveConnected?'书库已启用云端同步':'';
+  card.classList.toggle('show',driveConnected&&!!driveUser);
+  if(driveUser){
+    const displayName = driveUser.name||driveUser.email||'Google 账号';
+    name.textContent=displayName;
+    email.textContent=driveUser.email||'';
+    avatar.innerHTML='';
+    if(driveUser.picture){
+      const img=document.createElement('img');
+      img.src=driveUser.picture;
+      img.alt='';
+      avatar.appendChild(img);
+    } else {
+      avatar.textContent=(displayName.trim()[0]||'G').toUpperCase();
+    }
+  } else {
+    avatar.textContent='G';
+    name.textContent='Google 账号';
+    email.textContent='';
+  }
+}
+
+async function loadDriveUser(){
+  if(!driveToken) return;
+  try{
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{
+      headers:{Authorization:'Bearer '+driveToken}
+    });
+    if(!res.ok) return;
+    driveUser = await res.json();
+    saveStore();
+    updateDriveUI();
+  }catch(e){ console.error('Account load error',e) }
 }
 
 async function syncToDrive(id, ab, meta){
@@ -1194,6 +1263,7 @@ function gFetch(url,opts={}){
 openIDB().then(()=>{
   renderLibrary();
   renderSidebar();
+  updateDriveUI();
   // Set default theme button active
   document.querySelector('.t-light').classList.add('active');
 });
