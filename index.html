@@ -199,11 +199,22 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
 .section-count{font-size:12px;color:var(--text3)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:14px;margin-bottom:32px}
 .book-tile{
-  cursor:pointer;border-radius:10px;overflow:hidden;
+  cursor:pointer;border-radius:10px;overflow:hidden;position:relative;
   background:var(--surface);border:1px solid var(--border);
   transition:all var(--transition);
 }
 .book-tile:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
+.book-delete{
+  position:absolute;top:7px;left:7px;z-index:2;
+  width:26px;height:26px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.92);border:1px solid var(--border);
+  color:var(--text2);opacity:0;transition:all var(--transition);
+}
+.book-tile:hover .book-delete{opacity:1}
+.book-delete:hover{background:#fee2e2;border-color:#fca5a5;color:#b91c1c}
+[data-theme="dark"] .book-delete{background:rgba(40,34,29,.92)}
+@media (hover:none){.book-delete{opacity:1}}
 .tile-cover{
   height:160px;display:flex;align-items:center;
   justify-content:center;font-size:46px;
@@ -223,6 +234,14 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
 .tile-author{font-size:11px;color:var(--text3)}
 .tile-bar{height:2px;background:var(--border);border-radius:1px;margin-top:8px}
 .tile-fill{height:100%;border-radius:1px;background:var(--accent)}
+.loading-progress{
+  width:180px;height:4px;margin-top:12px;
+  background:var(--border);border-radius:999px;overflow:hidden;
+}
+.loading-progress-fill{
+  height:100%;width:0%;background:var(--accent);
+  border-radius:999px;transition:width .18s ease;
+}
 .empty-state{text-align:center;padding:60px 24px;color:var(--text2)}
 .empty-state svg{opacity:.3;margin-bottom:12px}
 .empty-state p{font-size:14px}
@@ -594,6 +613,9 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
       <div class="loading-box">
         <div class="spinner"></div>
         <div class="loading-txt" id="loadingTxt">正在加载书籍…</div>
+        <div class="loading-progress" id="loadingProgress">
+          <div class="loading-progress-fill" id="loadingProgressFill"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -665,6 +687,13 @@ function idbGet(key){
     req.onsuccess=()=>res(req.result); req.onerror=rej;
   });
 }
+function idbDelete(key){
+  return new Promise((res,rej)=>{
+    const tx=idbDB.transaction('files','readwrite');
+    tx.objectStore('files').delete(key);
+    tx.oncomplete=res; tx.onerror=rej;
+  });
+}
 
 // ─── Book meta ───────────────────────────────────────────────────
 function getBooks(){ return store.books||[] }
@@ -676,8 +705,26 @@ function saveBook(meta){
 }
 function deleteBook(id){
   store.books=(store.books||[]).filter(b=>b.id!==id);
+  bookmarkSet.delete(id);
+  if(currentBook&&currentBook.id===id) currentBook=null;
   saveStore();
-  idbPut(id,null); // clear binary
+  return idbDelete(id);
+}
+
+async function removeBook(id, e){
+  if(e) e.stopPropagation();
+  const book = getBooks().find(b=>b.id===id);
+  if(!book) return;
+  if(!confirm('确定删除「'+book.title+'」吗？本地文件也会一起删除。')) return;
+  const wasCurrent = currentBook&&currentBook.id===id;
+  try{
+    await deleteBook(id);
+    toast('已删除「'+book.title+'」','success');
+    renderLibrary(); renderSidebar();
+    if(wasCurrent) showLibrary();
+  }catch(err){
+    toast('删除失败：'+err.message,'warn');
+  }
 }
 
 const EMOJIS=['📗','📘','📙','📕','📓','📔','📒','🗒️'];
@@ -711,6 +758,9 @@ function renderLibrary(){
     <div class="grid">
       ${books.map(b=>`
         <div class="book-tile" onclick="openBook('${b.id}')">
+          <button class="book-delete" onclick="removeBook('${b.id}', event)" title="删除书籍" aria-label="删除书籍">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </button>
           <div class="tile-cover" style="background:${b.color||'#f0ece4'}">
             <span>${b.emoji||'📖'}</span>
             ${b.prog>=99?'<span class="tile-badge">已读完</span>':''}
@@ -742,6 +792,17 @@ function renderSidebar(){
 // ─── File Handling ────────────────────────────────────────────────
 const EPUB_META_LIMIT = 25 * 1024 * 1024;
 function nextFrame(){ return new Promise(r=>requestAnimationFrame(()=>r())) }
+function readFileAsArrayBuffer(file, onProgress){
+  return new Promise((res,rej)=>{
+    const reader = new FileReader();
+    reader.onprogress = e=>{
+      if(e.lengthComputable && onProgress) onProgress(Math.round(e.loaded/e.total*70));
+    };
+    reader.onload = ()=>res(reader.result);
+    reader.onerror = ()=>rej(reader.error||new Error('文件读取失败'));
+    reader.readAsArrayBuffer(file);
+  });
+}
 
 async function handleFiles(files){
   for(const file of files){
@@ -753,7 +814,8 @@ async function handleFiles(files){
     await nextFrame();
     try{
       const id = 'book_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
-      const ab = await file.arrayBuffer();
+      const ab = await readFileAsArrayBuffer(file, pct=>setLoadingProgress(pct,'正在读取文件'));
+      setLoadingProgress(75,'正在保存到本地书库');
       await idbPut(id, ab);
       
       let title = file.name.replace(/\.[^.]+$/,'');
@@ -762,6 +824,7 @@ async function handleFiles(files){
       // Extract EPUB metadata
       if(ext==='epub' && file.size<=EPUB_META_LIMIT){
         try{
+          setLoadingProgress(82,'正在读取 EPUB 信息');
           const zip = await JSZip.loadAsync(ab);
           const opfPath = await getOpfPath(zip);
           if(opfPath){
@@ -776,6 +839,7 @@ async function handleFiles(files){
         }catch(e){}
       }
       
+      setLoadingProgress(92,'正在更新书库');
       const meta = { id, title, author, type:ext, emoji:randEmoji(), color:randColor(), prog:0, size:file.size, added:Date.now() };
       saveBook(meta);
       
@@ -803,7 +867,7 @@ async function getOpfPath(zip){
 async function openBook(id){
   const meta = getBooks().find(b=>b.id===id);
   if(!meta) return;
-  showLoading('正在打开「'+meta.title+'」…');
+  showLoading('正在打开「'+meta.title+'」…',5);
   
   currentBook = meta;
   meta.lastRead = Date.now();
@@ -820,8 +884,10 @@ async function openBook(id){
   document.getElementById('btnLibrary').style.display='';
   updateBookmarkIcon();
   
+  setLoadingProgress(12,'正在读取本地文件');
   const ab = await idbGet(id);
   if(!ab){ hideLoading(); toast('找不到文件数据','warn'); showLibrary(); return; }
+  setLoadingProgress(22,'正在准备阅读器');
   
   // Reset areas
   document.getElementById('epubFrame').style.display='none';
@@ -833,10 +899,11 @@ async function openBook(id){
   
   try{
     if(meta.type==='epub') await openEpub(ab, meta);
-    else if(meta.type==='txt') openTxt(ab, meta);
-    else if(meta.type==='pdf') await openPdf(ab, meta);
+    else if(meta.type==='txt'){ setLoadingProgress(60,'正在解析 TXT'); openTxt(ab, meta); }
+    else if(meta.type==='pdf'){ setLoadingProgress(45,'正在解析 PDF'); await openPdf(ab, meta); }
   }catch(e){
     hideLoading(); toast('打开失败：'+e.message,'warn');
+    return;
   }
   
   renderSidebar();
@@ -847,6 +914,7 @@ async function openBook(id){
 
 // ─── EPUB ─────────────────────────────────────────────────────────
 async function openEpub(ab, meta){
+  setLoadingProgress(30,'正在创建 EPUB 阅读器');
   const blob = new Blob([ab],{type:'application/epub+zip'});
   const url = URL.createObjectURL(blob);
   epubBook = ePub(url);
@@ -858,6 +926,7 @@ async function openEpub(ab, meta){
     width:'100%', height:'100%',
     flow:'paginated', spread:'none'
   });
+  setLoadingProgress(45,'正在渲染 EPUB');
   
   // Apply theme to epub
   epubRendition.themes.register('folio',{
@@ -865,13 +934,14 @@ async function openEpub(ab, meta){
   });
   epubRendition.themes.select('folio');
   
-  await epubBook.ready;
-  
-  // Chapters
-  const toc = epubBook.navigation.toc;
-  renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
-  
+  setLoadingProgress(65,'正在加载 EPUB 正文');
   await epubRendition.display(meta.epubCfi||undefined);
+  setLoadingProgress(98,'正在完成加载');
+
+  epubBook.ready.then(()=>{
+    const toc = epubBook.navigation.toc||[];
+    renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
+  }).catch(()=>{});
   
   epubRendition.on('relocated', loc=>{
     const p = typeof loc.start.percentage==='number'
@@ -1114,8 +1184,20 @@ function onDragLeave(){ document.getElementById('dropZone').classList.remove('dr
 function onDrop(e){ e.preventDefault(); onDragLeave(); handleFiles(e.dataTransfer.files) }
 
 // ─── Loading ─────────────────────────────────────────────────────
-function showLoading(txt){ document.getElementById('loadingTxt').textContent=txt||'加载中…'; document.getElementById('loadingOverlay').classList.add('show') }
-function hideLoading(){ document.getElementById('loadingOverlay').classList.remove('show') }
+function showLoading(txt, pct=0){
+  document.getElementById('loadingTxt').textContent=txt||'加载中…';
+  document.getElementById('loadingOverlay').classList.add('show');
+  setLoadingProgress(pct);
+}
+function setLoadingProgress(pct, txt){
+  const val = Math.max(0,Math.min(100,Math.round(pct||0)));
+  document.getElementById('loadingProgressFill').style.width=val+'%';
+  if(txt) document.getElementById('loadingTxt').textContent=txt+' '+val+'%';
+}
+function hideLoading(){
+  setLoadingProgress(100);
+  setTimeout(()=>document.getElementById('loadingOverlay').classList.remove('show'),120);
+}
 
 // ─── Toast ───────────────────────────────────────────────────────
 let toastT;
@@ -1186,9 +1268,9 @@ function updateDriveUI(){
   const name=document.getElementById('accountName');
   const email=document.getElementById('accountEmail');
   btn.classList.toggle('connected',driveConnected);
-  txt.textContent=driveConnected?'已连接 Google Drive':'连接 Google Drive';
-  status.textContent=driveConnected?'书库已启用云端同步':'';
-  card.classList.toggle('show',driveConnected&&!!driveUser);
+  txt.textContent=driveConnected?'已连接 Google Drive':(driveUser?'重新连接 Google Drive':'连接 Google Drive');
+  status.textContent=driveConnected?'书库已启用云端同步':(driveUser?'已记住账号，刷新后需重新授权同步':'');
+  card.classList.toggle('show',!!driveUser);
   if(driveUser){
     const displayName = driveUser.name||driveUser.email||'Google 账号';
     name.textContent=displayName;
