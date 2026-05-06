@@ -657,7 +657,7 @@ let driveToken = null;
 let driveUser = store.driveUser||null;
 
 // epub.js book instance
-let epubBook = null, epubRendition = null;
+let epubBook = null, epubRendition = null, epubObjectUrl = null;
 // PDF.js
 let pdfDoc = null, pdfPage = 1, pdfTotal = 0;
 // TXT
@@ -829,6 +829,7 @@ function renderSidebar(){
 
 // ─── File Handling ────────────────────────────────────────────────
 const EPUB_META_LIMIT = 25 * 1024 * 1024;
+const EPUB_QUICK_LIMIT = 45 * 1024 * 1024;
 function nextFrame(){ return new Promise(r=>requestAnimationFrame(()=>r())) }
 function waitWithTimeout(promise, ms, fallback){
   return Promise.race([
@@ -836,6 +837,15 @@ function waitWithTimeout(promise, ms, fallback){
     new Promise(res=>setTimeout(()=>res(fallback),ms))
   ]);
 }
+function cleanupEpub(){
+  if(epubBook){ try{ epubBook.destroy() }catch(e){} }
+  epubBook=null; epubRendition=null;
+  if(epubObjectUrl){
+    URL.revokeObjectURL(epubObjectUrl);
+    epubObjectUrl=null;
+  }
+}
+function isLargeEpub(meta){ return meta && meta.type==='epub' && (meta.size||0)>EPUB_QUICK_LIMIT }
 function dirname(path){
   const i = path.lastIndexOf('/');
   return i>=0 ? path.slice(0,i+1) : '';
@@ -951,8 +961,7 @@ async function openBook(id){
   document.getElementById('pdfArea').style.display='none';
   document.getElementById('pdfNav').style.display='none';
   document.getElementById('cpList').innerHTML='';
-  if(epubBook){ try{ epubBook.destroy() }catch(e){} }
-  epubBook=null; epubRendition=null;
+  cleanupEpub();
   
   if(meta.type==='txt'){
     const cached = await getChapterCache(meta);
@@ -967,12 +976,13 @@ async function openBook(id){
     }
   }
   
-  setLoadingProgress(12,'正在读取本地文件');
-  const ab = await idbGet(id);
-  if(!ab){ hideLoading(); toast('找不到文件数据','warn'); showLibrary(); return; }
-  setLoadingProgress(22,'正在准备阅读器');
-  
+  let ab;
   try{
+    setLoadingProgress(12,'正在读取本地文件');
+    ab = await idbGet(id);
+    if(!ab){ hideLoading(); toast('找不到文件数据','warn'); showLibrary(); return; }
+    setLoadingProgress(22,'正在准备阅读器');
+  
     if(meta.type==='epub') await openEpub(ab, meta);
     else if(meta.type==='txt'){ setLoadingProgress(60,'正在解析 TXT'); await openTxt(ab, meta); }
     else if(meta.type==='pdf'){ setLoadingProgress(45,'正在解析 PDF'); await openPdf(ab, meta); }
@@ -990,16 +1000,38 @@ async function openBook(id){
 // ─── EPUB ─────────────────────────────────────────────────────────
 async function openEpub(ab, meta){
   epubMode = 'full';
-  document.getElementById('btnEpubMode').classList.remove('active');
-  document.getElementById('btnEpubMode').title='切换到快速文本模式';
+  const modeBtn = document.getElementById('btnEpubMode');
+  modeBtn.classList.remove('active');
+  modeBtn.title = isLargeEpub(meta) ? '大 EPUB 已使用完整模式，避免全书解压卡顿' : '切换到快速文本模式';
   await openEpubFull(ab, meta);
 }
 
+async function toggleEpubMode(){
+  if(!currentBook || currentBook.type!=='epub') return;
+  if(epubMode==='full' && isLargeEpub(currentBook)){
+    toast('这本 EPUB 较大，已保持完整模式以避免全书解压卡顿','warn');
+    return;
+  }
+  showLoading(epubMode==='full'?'正在切换到快速文本模式…':'正在切换到完整 EPUB 模式…',10);
+  try{
+    const ab = await idbGet(currentBook.id);
+    if(!ab) throw new Error('找不到文件数据');
+    if(epubMode==='full') await openEpubQuick(ab, currentBook);
+    else await openEpubFull(ab, currentBook);
+    applyReaderSettings();
+  }catch(e){
+    toast('切换失败：'+e.message,'warn');
+  }finally{
+    hideLoading();
+  }
+}
+
 async function openEpubQuick(ab, meta){
+  if(isLargeEpub(meta)) throw new Error('大 EPUB 不建议快速提取全文，请使用完整模式阅读');
   epubMode = 'quick';
   document.getElementById('btnEpubMode').classList.add('active');
   document.getElementById('btnEpubMode').title='切换到完整 EPUB 模式';
-  epubBook=null; epubRendition=null;
+  cleanupEpub();
   const cached = await getChapterCache(meta);
   if(cached&&cached.chapters&&cached.chapters.length){
     setLoadingProgress(82,'正在读取章节缓存');
@@ -1043,11 +1075,14 @@ async function openEpubQuick(ab, meta){
 }
 
 async function openEpubFull(ab, meta){
-  epubBook=null; epubRendition=null;
+  cleanupEpub();
+  epubMode = 'full';
+  document.getElementById('btnEpubMode').classList.remove('active');
+  document.getElementById('btnEpubMode').title = isLargeEpub(meta) ? '大 EPUB 已使用完整模式，避免全书解压卡顿' : '切换到快速文本模式';
   setLoadingProgress(30,'正在打开完整 EPUB');
   const blob = new Blob([ab],{type:'application/epub+zip'});
-  const url = URL.createObjectURL(blob);
-  epubBook = ePub(url);
+  epubObjectUrl = URL.createObjectURL(blob);
+  epubBook = ePub(epubObjectUrl);
   const frame = document.getElementById('epubFrame');
   frame.innerHTML='';
   frame.style.display='block';
@@ -1134,16 +1169,7 @@ async function openTxt(ab, meta){
     showTextChapters(cached.chapters, meta, 'TXT');
     return;
   }
-  const dec = new TextDecoder('utf-8');
-  let text = dec.decode(ab);
-  
-  // Try GB18030 if garbled
-  if(text.includes('�')){
-    try{
-      const dec2 = new TextDecoder('gb18030');
-      text = dec2.decode(ab);
-    }catch(e){}
-  }
+  let text = decodeTextFile(ab);
   
   // Split into paragraphs and chunk
   const paras = text.split(/\n+/).filter(p=>p.trim());
@@ -1174,6 +1200,19 @@ function renderTxtChunk(){
   if(currentBook){ currentBook.prog=prog; saveBook(currentBook) }
   document.getElementById('cpList').querySelectorAll('.cp-item').forEach((el,i)=>el.classList.toggle('active',i===txtChunk));
   applyReaderSettings();
+}
+
+function decodeTextFile(ab){
+  const bytes = new Uint8Array(ab);
+  if(bytes[0]===0xEF && bytes[1]===0xBB && bytes[2]===0xBF) return new TextDecoder('utf-8').decode(bytes.slice(3));
+  if(bytes[0]===0xFF && bytes[1]===0xFE) return new TextDecoder('utf-16le').decode(bytes.slice(2));
+  if(bytes[0]===0xFE && bytes[1]===0xFF) return new TextDecoder('utf-16be').decode(bytes.slice(2));
+  try{
+    return new TextDecoder('utf-8',{fatal:true}).decode(ab);
+  }catch(e){
+    try{ return new TextDecoder('gb18030').decode(ab) }
+    catch(err){ return new TextDecoder('utf-8').decode(ab) }
+  }
 }
 
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
@@ -1334,8 +1373,7 @@ function showLibrary(){
   searchOpen=false; chaptersOpen=false;
   document.getElementById('chaptersPanel').classList.remove('open');
   currentBook=null;
-  if(epubBook){ try{epubBook.destroy()}catch(e){} }
-  epubBook=null; epubRendition=null;
+  cleanupEpub();
   renderLibrary(); renderSidebar();
 }
 function setNav(v){
@@ -1533,6 +1571,12 @@ openIDB().then(()=>{
   updateDriveUI();
   // Set default theme button active
   document.querySelector('.t-light').classList.add('active');
+}).catch(()=>{
+  renderLibrary();
+  renderSidebar();
+  updateDriveUI();
+  document.querySelector('.t-light').classList.add('active');
+  toast('本地书库初始化失败，请检查浏览器存储权限或剩余空间','warn');
 });
 
 // Keyboard shortcuts
@@ -1540,8 +1584,10 @@ document.addEventListener('keydown', e=>{
   if(e.target.tagName==='INPUT') return;
   if(e.key==='ArrowRight'&&currentBook?.type==='pdf') pdfNext();
   if(e.key==='ArrowLeft'&&currentBook?.type==='pdf') pdfPrev();
-  if(e.key==='ArrowRight'&&(currentBook?.type==='epub'||currentBook?.type==='txt')) textNext();
-  if(e.key==='ArrowLeft'&&(currentBook?.type==='epub'||currentBook?.type==='txt')) textPrev();
+  if(e.key==='ArrowRight'&&currentBook?.type==='epub'&&epubMode==='full'&&epubRendition) epubRendition.next();
+  else if(e.key==='ArrowRight'&&(currentBook?.type==='epub'||currentBook?.type==='txt')) textNext();
+  if(e.key==='ArrowLeft'&&currentBook?.type==='epub'&&epubMode==='full'&&epubRendition) epubRendition.prev();
+  else if(e.key==='ArrowLeft'&&(currentBook?.type==='epub'||currentBook?.type==='txt')) textPrev();
   if(e.key==='Escape'){ if(chaptersOpen)toggleChapters(); if(searchOpen)toggleSearch(); }
   if((e.ctrlKey||e.metaKey)&&e.key==='f'&&currentBook){ e.preventDefault(); toggleSearch() }
 });
