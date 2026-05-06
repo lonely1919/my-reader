@@ -573,7 +573,7 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
       </div>
 
       <!-- EPUB frame -->
-      <iframe id="epubFrame" title="EPUB阅读区"></iframe>
+      <div id="epubFrame" title="EPUB阅读区"></div>
 
       <!-- TXT area -->
       <div class="txt-area" id="txtArea" onscroll="updateProg()" style="display:none">
@@ -792,6 +792,12 @@ function renderSidebar(){
 // ─── File Handling ────────────────────────────────────────────────
 const EPUB_META_LIMIT = 25 * 1024 * 1024;
 function nextFrame(){ return new Promise(r=>requestAnimationFrame(()=>r())) }
+function waitWithTimeout(promise, ms, fallback){
+  return Promise.race([
+    promise,
+    new Promise(res=>setTimeout(()=>res(fallback),ms))
+  ]);
+}
 function readFileAsArrayBuffer(file, onProgress){
   return new Promise((res,rej)=>{
     const reader = new FileReader();
@@ -934,14 +940,9 @@ async function openEpub(ab, meta){
   });
   epubRendition.themes.select('folio');
   
-  setLoadingProgress(65,'正在加载 EPUB 正文');
-  await epubRendition.display(meta.epubCfi||undefined);
-  setLoadingProgress(98,'正在完成加载');
-
-  epubBook.ready.then(()=>{
-    const toc = epubBook.navigation.toc||[];
-    renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
-  }).catch(()=>{});
+  epubRendition.on('rendered', ()=>{
+    setLoadingProgress(96,'EPUB 正文已显示');
+  });
   
   epubRendition.on('relocated', loc=>{
     const p = typeof loc.start.percentage==='number'
@@ -954,6 +955,43 @@ async function openEpub(ab, meta){
       saveBook(currentBook);
     }
   });
+  
+  setLoadingProgress(65,'正在加载 EPUB 正文');
+  let displayResult = 'ok';
+  if(meta.epubCfi){
+    displayResult = await waitWithTimeout(
+      epubRendition.display(meta.epubCfi).catch(()=> 'bad-cfi'),
+      5000,
+      'timeout'
+    );
+    if(displayResult==='timeout' || displayResult==='bad-cfi'){
+      meta.epubCfi='';
+      saveBook(meta);
+      setLoadingProgress(78,'阅读位置失效，正在打开第一页');
+      displayResult = await waitWithTimeout(
+        epubRendition.display().catch(()=> 'display-error'),
+        8000,
+        'timeout'
+      );
+    }
+  } else {
+    displayResult = await waitWithTimeout(
+      epubRendition.display().catch(()=> 'display-error'),
+      8000,
+      'timeout'
+    );
+  }
+  if(displayResult==='timeout'){
+    toast('EPUB 仍在后台渲染，可先稍等或尝试重新打开','warn');
+  } else if(displayResult==='display-error'){
+    throw new Error('EPUB 正文渲染失败');
+  }
+  setLoadingProgress(98,'正在完成加载');
+
+  epubBook.ready.then(()=>{
+    const toc = epubBook.navigation.toc||[];
+    renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
+  }).catch(()=>{});
 }
 
 // ─── TXT ──────────────────────────────────────────────────────────
