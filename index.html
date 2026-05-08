@@ -86,30 +86,6 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
 [data-theme="dark"] .drive-btn.connected{background:#1b2e1c;border-color:#388e3c;color:#81c784}
 .drive-btn svg{flex-shrink:0}
 .drive-status{font-size:11px;color:var(--text3);text-align:center;padding:2px 0}
-.account-card{
-  display:none;align-items:center;gap:8px;
-  padding:8px;border:1px solid var(--border);border-radius:8px;
-  background:var(--surface2);min-width:0;
-}
-.account-card.show{display:flex}
-.account-avatar{
-  width:28px;height:28px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  background:var(--accent);color:white;font-size:12px;font-weight:600;
-  flex-shrink:0;overflow:hidden;
-}
-.account-avatar img{width:100%;height:100%;object-fit:cover}
-.account-meta{min-width:0;flex:1}
-.account-name,.account-email{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.account-name{font-size:12px;font-weight:600;color:var(--text)}
-.account-email{font-size:11px;color:var(--text3);margin-top:1px}
-.account-logout{
-  width:28px;height:28px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  border:1px solid var(--border);background:var(--surface);
-  color:var(--text2);flex-shrink:0;transition:all var(--transition);
-}
-.account-logout:hover{background:#fee2e2;border-color:#fca5a5;color:#b91c1c}
 .sidebar-nav{padding:10px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
 .nav-item{
   display:flex;align-items:center;gap:8px;
@@ -206,22 +182,11 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
 .section-count{font-size:12px;color:var(--text3)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:14px;margin-bottom:32px}
 .book-tile{
-  cursor:pointer;border-radius:10px;overflow:hidden;position:relative;
+  cursor:pointer;border-radius:10px;overflow:hidden;
   background:var(--surface);border:1px solid var(--border);
   transition:all var(--transition);
 }
 .book-tile:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
-.book-delete{
-  position:absolute;top:7px;left:7px;z-index:2;
-  width:26px;height:26px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  background:rgba(255,255,255,.92);border:1px solid var(--border);
-  color:var(--text2);opacity:0;transition:all var(--transition);
-}
-.book-tile:hover .book-delete{opacity:1}
-.book-delete:hover{background:#fee2e2;border-color:#fca5a5;color:#b91c1c}
-[data-theme="dark"] .book-delete{background:rgba(40,34,29,.92)}
-@media (hover:none){.book-delete{opacity:1}}
 .tile-cover{
   height:160px;display:flex;align-items:center;
   justify-content:center;font-size:46px;
@@ -241,14 +206,6 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
 .tile-author{font-size:11px;color:var(--text3)}
 .tile-bar{height:2px;background:var(--border);border-radius:1px;margin-top:8px}
 .tile-fill{height:100%;border-radius:1px;background:var(--accent)}
-.loading-progress{
-  width:180px;height:4px;margin-top:12px;
-  background:var(--border);border-radius:999px;overflow:hidden;
-}
-.loading-progress-fill{
-  height:100%;width:0%;background:var(--accent);
-  border-radius:999px;transition:width .18s ease;
-}
 .empty-state{text-align:center;padding:60px 24px;color:var(--text2)}
 .empty-state svg{opacity:.3;margin-bottom:12px}
 .empty-state p{font-size:14px}
@@ -290,7 +247,6 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
   line-height:1.9;color:var(--text);
 }
 .txt-content p{margin-bottom:1.4em;font-size:var(--fs,17px)}
-.txt-content img{max-width:100%;height:auto;display:block;margin:1.2em auto;border-radius:4px}
 .txt-content h1,.txt-content h2{
   font-family:var(--serif);margin-bottom:1.2em;margin-top:1.8em;
   font-weight:600;color:var(--text);
@@ -452,16 +408,6 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
           </svg>
           <span id="driveBtnTxt">连接 Google Drive</span>
         </button>
-        <div class="account-card" id="accountCard" title="当前账号">
-          <div class="account-avatar" id="accountAvatar">G</div>
-          <div class="account-meta">
-            <div class="account-name" id="accountName">Google 账号</div>
-            <div class="account-email" id="accountEmail"></div>
-          </div>
-          <button class="account-logout" onclick="logoutDriveAccount(event)" title="退出账号" aria-label="退出账号">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          </button>
-        </div>
         <div class="drive-status" id="driveStatus"></div>
       </div>
     </div>
@@ -504,10 +450,6 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
         <!-- Chapters -->
         <button class="tb-btn" id="btnChapters" onclick="toggleChapters()" title="目录" style="display:none">
           <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-        </button>
-        <!-- EPUB mode -->
-        <button class="tb-btn" id="btnEpubMode" onclick="toggleEpubMode()" title="切换 EPUB 快速模式" style="display:none">
-          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7"/><path d="M9 11h7"/></svg>
         </button>
         <!-- Bookmark -->
         <button class="tb-btn" id="btnBookmark" onclick="toggleBookmark()" title="书签" style="display:none">
@@ -588,7 +530,7 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
       </div>
 
       <!-- EPUB frame -->
-      <div id="epubFrame" title="EPUB阅读区"></div>
+      <iframe id="epubFrame" title="EPUB阅读区"></iframe>
 
       <!-- TXT area -->
       <div class="txt-area" id="txtArea" onscroll="updateProg()" style="display:none">
@@ -628,9 +570,6 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
       <div class="loading-box">
         <div class="spinner"></div>
         <div class="loading-txt" id="loadingTxt">正在加载书籍…</div>
-        <div class="loading-progress" id="loadingProgress">
-          <div class="loading-progress-fill" id="loadingProgressFill"></div>
-        </div>
       </div>
     </div>
   </div>
@@ -655,16 +594,13 @@ let searchOpen = false;
 let bookmarkSet = new Set(store.bookmarks||[]);
 let driveConnected = false;
 let driveToken = null;
-let driveUser = store.driveUser||null;
 
 // epub.js book instance
-let epubBook = null, epubRendition = null, epubObjectUrl = null;
-let lazyEpub = null, lazyBlobUrls = [];
+let epubBook = null, epubRendition = null;
 // PDF.js
 let pdfDoc = null, pdfPage = 1, pdfTotal = 0;
 // TXT
 let txtChunks = [], txtChunk = 0;
-let epubMode = 'full';
 
 let fsVal = store.fs||17;
 let lhVal = store.lh||1.9;
@@ -676,13 +612,11 @@ function loadStore(){
 function saveStore(){
   store.fs = fsVal; store.lh = lhVal;
   store.bookmarks = [...bookmarkSet];
-  store.driveUser = driveUser;
   try{ localStorage.setItem(DB_KEY, JSON.stringify(store)) }catch(e){}
 }
 
 // ─── Book DB (IndexedDB for binary, localStorage for meta) ───────
 let idbDB = null;
-const CHAPTER_CACHE_VERSION = 3;
 function openIDB(){
   return new Promise((res,rej)=>{
     const req = indexedDB.open('folioBooks',1);
@@ -705,35 +639,6 @@ function idbGet(key){
     req.onsuccess=()=>res(req.result); req.onerror=rej;
   });
 }
-function idbDelete(key){
-  return new Promise((res,rej)=>{
-    const tx=idbDB.transaction('files','readwrite');
-    tx.objectStore('files').delete(key);
-    tx.oncomplete=res; tx.onerror=rej;
-  });
-}
-function idbDeletePrefix(prefix){
-  return new Promise((res,rej)=>{
-    const tx=idbDB.transaction('files','readwrite');
-    const storeObj=tx.objectStore('files');
-    const req=storeObj.openCursor();
-    req.onsuccess=e=>{
-      const cur=e.target.result;
-      if(cur){
-        if(String(cur.key).startsWith(prefix)) cur.delete();
-        cur.continue();
-      }
-    };
-    tx.oncomplete=res; tx.onerror=rej;
-  });
-}
-function cacheKey(meta){ return `cache_${meta.id}_${CHAPTER_CACHE_VERSION}_${meta.type}_${meta.size||0}` }
-async function getChapterCache(meta){
-  try{ return await idbGet(cacheKey(meta)) }catch(e){ return null }
-}
-async function saveChapterCache(meta, chapters){
-  try{ await idbPut(cacheKey(meta), {chapters}) }catch(e){}
-}
 
 // ─── Book meta ───────────────────────────────────────────────────
 function getBooks(){ return store.books||[] }
@@ -745,26 +650,8 @@ function saveBook(meta){
 }
 function deleteBook(id){
   store.books=(store.books||[]).filter(b=>b.id!==id);
-  bookmarkSet.delete(id);
-  if(currentBook&&currentBook.id===id) currentBook=null;
   saveStore();
-  return Promise.all([idbDelete(id), idbDeletePrefix(`cache_${id}_`).catch(()=>{})]);
-}
-
-async function removeBook(id, e){
-  if(e) e.stopPropagation();
-  const book = getBooks().find(b=>b.id===id);
-  if(!book) return;
-  if(!confirm('确定删除「'+book.title+'」吗？本地文件也会一起删除。')) return;
-  const wasCurrent = currentBook&&currentBook.id===id;
-  try{
-    await deleteBook(id);
-    toast('已删除「'+book.title+'」','success');
-    renderLibrary(); renderSidebar();
-    if(wasCurrent) showLibrary();
-  }catch(err){
-    toast('删除失败：'+err.message,'warn');
-  }
+  idbPut(id,null); // clear binary
 }
 
 const EMOJIS=['📗','📘','📙','📕','📓','📔','📒','🗒️'];
@@ -798,9 +685,6 @@ function renderLibrary(){
     <div class="grid">
       ${books.map(b=>`
         <div class="book-tile" onclick="openBook('${b.id}')">
-          <button class="book-delete" onclick="removeBook('${b.id}', event)" title="删除书籍" aria-label="删除书籍">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-          </button>
           <div class="tile-cover" style="background:${b.color||'#f0ece4'}">
             <span>${b.emoji||'📖'}</span>
             ${b.prog>=99?'<span class="tile-badge">已读完</span>':''}
@@ -830,60 +714,6 @@ function renderSidebar(){
 }
 
 // ─── File Handling ────────────────────────────────────────────────
-const EPUB_META_LIMIT = 25 * 1024 * 1024;
-const EPUB_QUICK_LIMIT = 45 * 1024 * 1024;
-const EPUB_LARGE_LIMIT = 80 * 1024 * 1024;
-function nextFrame(){ return new Promise(r=>requestAnimationFrame(()=>r())) }
-function waitWithTimeout(promise, ms, fallback){
-  return Promise.race([
-    promise,
-    new Promise(res=>setTimeout(()=>res(fallback),ms))
-  ]);
-}
-function cleanupLazyEpub(){
-  lazyBlobUrls.forEach(url=>URL.revokeObjectURL(url));
-  lazyBlobUrls = [];
-  lazyEpub = null;
-}
-function cleanupEpub(){
-  if(epubBook){ try{ epubBook.destroy() }catch(e){} }
-  epubBook=null; epubRendition=null;
-  if(epubObjectUrl){
-    URL.revokeObjectURL(epubObjectUrl);
-    epubObjectUrl=null;
-  }
-  cleanupLazyEpub();
-}
-function isQuickLimitedEpub(meta){ return meta && meta.type==='epub' && (meta.size||0)>EPUB_QUICK_LIMIT }
-function isLargeEpub(meta){ return meta && meta.type==='epub' && (meta.size||0)>EPUB_LARGE_LIMIT }
-function dirname(path){
-  const i = path.lastIndexOf('/');
-  return i>=0 ? path.slice(0,i+1) : '';
-}
-function resolvePath(base, href){
-  if(!href) return '';
-  if(/^https?:\/\//i.test(href)) return href;
-  const parts = (dirname(base)+href).split('/');
-  const out = [];
-  for(const part of parts){
-    if(!part || part==='.') continue;
-    if(part==='..') out.pop();
-    else out.push(part);
-  }
-  return out.join('/');
-}
-function readFileAsArrayBuffer(file, onProgress){
-  return new Promise((res,rej)=>{
-    const reader = new FileReader();
-    reader.onprogress = e=>{
-      if(e.lengthComputable && onProgress) onProgress(Math.round(e.loaded/e.total*70));
-    };
-    reader.onload = ()=>res(reader.result);
-    reader.onerror = ()=>rej(reader.error||new Error('文件读取失败'));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
 async function handleFiles(files){
   for(const file of files){
     const ext = file.name.split('.').pop().toLowerCase();
@@ -891,20 +721,17 @@ async function handleFiles(files){
       toast('格式不支持，请上传 TXT / EPUB / PDF','warn'); continue;
     }
     showLoading('正在导入「'+file.name+'」…');
-    await nextFrame();
     try{
       const id = 'book_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
-      const ab = await readFileAsArrayBuffer(file, pct=>setLoadingProgress(pct,'正在读取文件'));
-      setLoadingProgress(75,'正在保存到本地书库');
+      const ab = await file.arrayBuffer();
       await idbPut(id, ab);
       
       let title = file.name.replace(/\.[^.]+$/,'');
       let author = '';
       
       // Extract EPUB metadata
-      if(ext==='epub' && file.size<=EPUB_META_LIMIT){
+      if(ext==='epub'){
         try{
-          setLoadingProgress(82,'正在读取 EPUB 信息');
           const zip = await JSZip.loadAsync(ab);
           const opfPath = await getOpfPath(zip);
           if(opfPath){
@@ -919,7 +746,6 @@ async function handleFiles(files){
         }catch(e){}
       }
       
-      setLoadingProgress(92,'正在更新书库');
       const meta = { id, title, author, type:ext, emoji:randEmoji(), color:randColor(), prog:0, size:file.size, added:Date.now() };
       saveBook(meta);
       
@@ -947,7 +773,7 @@ async function getOpfPath(zip){
 async function openBook(id){
   const meta = getBooks().find(b=>b.id===id);
   if(!meta) return;
-  showLoading('正在打开「'+meta.title+'」…',5);
+  showLoading('正在打开「'+meta.title+'」…');
   
   currentBook = meta;
   meta.lastRead = Date.now();
@@ -962,43 +788,25 @@ async function openBook(id){
   document.getElementById('btnChapters').style.display='';
   document.getElementById('btnBookmark').style.display='';
   document.getElementById('btnLibrary').style.display='';
-  document.getElementById('btnEpubMode').style.display=meta.type==='epub'?'':'none';
   updateBookmarkIcon();
   
-  // Reset areas before trying cache or binary load
+  const ab = await idbGet(id);
+  if(!ab){ hideLoading(); toast('找不到文件数据','warn'); showLibrary(); return; }
+  
+  // Reset areas
   document.getElementById('epubFrame').style.display='none';
   document.getElementById('txtArea').style.display='none';
   document.getElementById('pdfArea').style.display='none';
   document.getElementById('pdfNav').style.display='none';
   document.getElementById('cpList').innerHTML='';
-  cleanupEpub();
+  if(epubBook){ try{ epubBook.destroy() }catch(e){} epubBook=null; }
   
-  if(meta.type==='txt'){
-    const cached = await getChapterCache(meta);
-    if(cached&&cached.chapters&&cached.chapters.length){
-      setLoadingProgress(82,'正在读取章节缓存');
-      showTextChapters(cached.chapters, meta, 'TXT');
-      renderSidebar();
-      closeSidebar();
-      applyReaderSettings();
-      hideLoading();
-      return;
-    }
-  }
-  
-  let ab;
   try{
-    setLoadingProgress(12,'正在读取本地文件');
-    ab = await idbGet(id);
-    if(!ab){ hideLoading(); toast('找不到文件数据','warn'); showLibrary(); return; }
-    setLoadingProgress(22,'正在准备阅读器');
-  
     if(meta.type==='epub') await openEpub(ab, meta);
-    else if(meta.type==='txt'){ setLoadingProgress(60,'正在解析 TXT'); await openTxt(ab, meta); }
-    else if(meta.type==='pdf'){ setLoadingProgress(45,'正在解析 PDF'); await openPdf(ab, meta); }
+    else if(meta.type==='txt') openTxt(ab, meta);
+    else if(meta.type==='pdf') await openPdf(ab, meta);
   }catch(e){
     hideLoading(); toast('打开失败：'+e.message,'warn');
-    return;
   }
   
   renderSidebar();
@@ -1009,446 +817,57 @@ async function openBook(id){
 
 // ─── EPUB ─────────────────────────────────────────────────────────
 async function openEpub(ab, meta){
-  if(isLargeEpub(meta)){
-    await openEpubLazy(ab, meta);
-    return;
-  }
-  epubMode = 'full';
-  const modeBtn = document.getElementById('btnEpubMode');
-  modeBtn.classList.remove('active');
-  modeBtn.title = isQuickLimitedEpub(meta) ? '较大 EPUB 已使用完整模式，避免全书解压卡顿' : '切换到快速文本模式';
-  await openEpubFull(ab, meta);
-}
-
-async function toggleEpubMode(){
-  if(!currentBook || currentBook.type!=='epub') return;
-  if(epubMode==='lazy'){
-    toast('这本 EPUB 较大，已使用按章节读取模式','info');
-    return;
-  }
-  if(epubMode==='full' && isQuickLimitedEpub(currentBook)){
-    toast('这本 EPUB 较大，已保持完整模式以避免全书解压卡顿','warn');
-    return;
-  }
-  showLoading(epubMode==='full'?'正在切换到快速文本模式…':'正在切换到完整 EPUB 模式…',10);
-  try{
-    const ab = await idbGet(currentBook.id);
-    if(!ab) throw new Error('找不到文件数据');
-    if(epubMode==='full') await openEpubQuick(ab, currentBook);
-    else await openEpubFull(ab, currentBook);
-    applyReaderSettings();
-  }catch(e){
-    toast('切换失败：'+e.message,'warn');
-  }finally{
-    hideLoading();
-  }
-}
-
-async function openEpubQuick(ab, meta){
-  if(isQuickLimitedEpub(meta)) throw new Error('较大 EPUB 不建议快速提取全文，请使用完整模式阅读');
-  epubMode = 'quick';
-  document.getElementById('btnEpubMode').classList.add('active');
-  document.getElementById('btnEpubMode').title='切换到完整 EPUB 模式';
-  cleanupEpub();
-
-  const cached = await getChapterCache(meta);
-  if(cached&&cached.chapters&&cached.chapters.length){
-    setLoadingProgress(82,'正在读取章节缓存');
-    showTextChapters(cached.chapters, meta, 'EPUB');
-    return;
-  }
-
-  setLoadingProgress(25,'正在解压 EPUB');
-
-  // Try off-main-thread parsing via Web Worker to avoid UI freeze on large EPUBs
-  let chapters = null;
-  try {
-    chapters = await parseEpubInWorker(ab, (pct, txt) => setLoadingProgress(pct, txt));
-  } catch(workerErr) {
-    // Worker not available (file:// protocol, CSP) — fall back to main thread
-    console.warn('Worker fallback:', workerErr.message);
-    chapters = await parseEpubMainThread(ab, meta);
-  }
-
-  if(!chapters||!chapters.length) throw new Error('没有提取到可阅读文本');
-  await saveChapterCache(meta, chapters);
-  setLoadingProgress(96,'正在显示 EPUB');
-  showTextChapters(chapters, meta, 'EPUB');
-  toast('已使用 EPUB 快速阅读模式','success');
-}
-
-// Off-main-thread EPUB parsing — keeps UI responsive during large book extraction
-function parseEpubInWorker(ab, onProgress){
-  return new Promise((resolve, reject)=>{
-    // Build the worker as an inline Blob — no separate file needed
-    const workerCode = `
-importScripts('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
-
-function resolvePath(base, href){
-  if(!href) return '';
-  if(/^https?:\\/\\//i.test(href)) return href;
-  const dir = base.lastIndexOf('/')>=0 ? base.slice(0,base.lastIndexOf('/')+1) : '';
-  const parts = (dir+href).split('/');
-  const out = [];
-  for(const p of parts){ if(!p||p==='.') continue; if(p==='..') out.pop(); else out.push(p); }
-  return out.join('/');
-}
-
-self.onmessage = async function(e){
-  const ab = e.data;
-  try {
-    self.postMessage({type:'progress', pct:28, txt:'正在解压 EPUB'});
-    const zip = await JSZip.loadAsync(ab);
-    self.postMessage({type:'progress', pct:38, txt:'正在读取目录'});
-
-    // Read container.xml → OPF path
-    const container = await zip.file('META-INF/container.xml').async('text');
-    const m = container.match(/full-path="([^"]+\\.opf)"/);
-    if(!m) throw new Error('找不到 EPUB 目录文件');
-    const opfPath = m[1];
-
-    const opfText = await zip.file(opfPath).async('text');
-    const doc = new DOMParser().parseFromString(opfText,'application/xml');
-    const manifest = {};
-    doc.querySelectorAll('manifest item').forEach(item=>{
-      manifest[item.getAttribute('id')] = resolvePath(opfPath, item.getAttribute('href')||'');
-    });
-    const spine = [...doc.querySelectorAll('spine itemref')]
-      .map(item=>manifest[item.getAttribute('idref')])
-      .filter(Boolean);
-    if(!spine.length) throw new Error('EPUB 没有可读取的正文');
-
-    self.postMessage({type:'progress', pct:50, txt:'正在提取正文'});
-    const chapters = [];
-    for(let i=0;i<spine.length;i++){
-      const path = spine[i].split('#')[0];
-      const file = zip.file(path) || zip.file(decodeURIComponent(path.replace(/^\\//,'')));
-      if(!file) continue;
-      const html = await file.async('text');
-      const hdoc = new DOMParser().parseFromString(html,'text/html');
-      hdoc.querySelectorAll('script,style,nav,svg').forEach(n=>n.remove());
-      const heading = hdoc.querySelector('h1,h2,h3,title');
-      const title = (heading ? heading.textContent : '').trim() || ('第 '+(i+1)+' 节');
-      const nodes = hdoc.body ? hdoc.body.querySelectorAll('h1,h2,h3,h4,p,li,blockquote') : [];
-      const paras = [];
-      let last = '';
-      nodes.forEach(node=>{
-        const text = node.textContent.replace(/\\s+/g,' ').trim();
-        if(text && text!==title && text!==last && text.length>1){ paras.push(text); last=text; }
-      });
-      if(!paras.length && hdoc.body){
-        const text = hdoc.body.textContent.replace(/\\s+/g,' ').trim();
-        if(text) paras.push(text);
-      }
-      if(paras.length) chapters.push({title, paras});
-      if((i+1)%5===0) self.postMessage({type:'progress', pct:50+Math.round((i+1)/spine.length*42), txt:'正在提取正文 ('+(i+1)+'/'+spine.length+')'});
-    }
-    self.postMessage({type:'done', chapters});
-  } catch(err) {
-    self.postMessage({type:'error', message: err.message||String(err)});
-  }
-};`;
-
-    let worker;
-    try {
-      const blob = new Blob([workerCode], {type:'application/javascript'});
-      const url = URL.createObjectURL(blob);
-      worker = new Worker(url);
-      URL.revokeObjectURL(url);
-    } catch(e) {
-      reject(new Error('Worker 不可用: '+e.message)); return;
-    }
-
-    worker.onmessage = e=>{
-      const msg = e.data;
-      if(msg.type==='progress'){ onProgress(msg.pct, msg.txt) }
-      else if(msg.type==='done'){ worker.terminate(); resolve(msg.chapters) }
-      else if(msg.type==='error'){ worker.terminate(); reject(new Error(msg.message)) }
-    };
-    worker.onerror = err=>{ worker.terminate(); reject(new Error(err.message||'Worker 错误')) };
-    worker.postMessage(ab, [ab]); // transfer ownership — zero copy
-  });
-}
-
-// Main-thread fallback for environments that block Workers (file://, strict CSP)
-async function parseEpubMainThread(ab, meta){
-  setLoadingProgress(30,'正在解压 EPUB');
-  const zip = await JSZip.loadAsync(ab);
-  setLoadingProgress(45,'正在读取 EPUB 目录');
-  const opfPath = await getOpfPath(zip);
-  if(!opfPath) throw new Error('找不到 EPUB 目录文件');
-  const opfText = await zip.file(opfPath).async('text');
-  const doc = new DOMParser().parseFromString(opfText,'application/xml');
-  const manifest = {};
-  doc.querySelectorAll('manifest item').forEach(item=>{
-    manifest[item.getAttribute('id')] = resolvePath(opfPath, item.getAttribute('href')||'');
-  });
-  const spine = [...doc.querySelectorAll('spine itemref')]
-    .map(item=>manifest[item.getAttribute('idref')])
-    .filter(Boolean);
-  if(!spine.length) throw new Error('EPUB 没有可读取的正文');
-
-  setLoadingProgress(60,'正在提取 EPUB 正文');
-  const chapters = [];
-  for(let i=0;i<spine.length;i++){
-    const path = spine[i].split('#')[0];
-    const file = zip.file(path);
-    if(!file) continue;
-    const html = await file.async('text');
-    const chapter = epubHtmlToChapter(html, i);
-    if(chapter.paras.length) chapters.push(chapter);
-    setLoadingProgress(60 + Math.round((i+1)/spine.length*32), '正在提取 EPUB 正文');
-    if((i+1)%8===0) await nextFrame(); // yield to keep UI alive every 8 chapters
-  }
-  return chapters;
-}
-
-async function openEpubFull(ab, meta){
-  cleanupEpub();
-  epubMode = 'full';
-  document.getElementById('btnEpubMode').classList.remove('active');
-  document.getElementById('btnEpubMode').title = isQuickLimitedEpub(meta) ? '较大 EPUB 已使用完整模式，避免全书解压卡顿' : '切换到快速文本模式';
-  setLoadingProgress(30,'正在打开完整 EPUB');
-
   const blob = new Blob([ab],{type:'application/epub+zip'});
-  epubObjectUrl = URL.createObjectURL(blob);
-  epubBook = ePub(epubObjectUrl);
-
+  const url = URL.createObjectURL(blob);
+  epubBook = ePub(url);
+  
   const frame = document.getElementById('epubFrame');
-  frame.innerHTML='';
-  // Show frame immediately so user sees something while rendering
   frame.style.display='block';
-  document.getElementById('txtArea').style.display='none';
-
-  // scrolled-continuous: no per-page layout calc, significantly faster than paginated
+  
   epubRendition = epubBook.renderTo(frame, {
     width:'100%', height:'100%',
-    flow:'scrolled-continuous', spread:'none', manager:'continuous'
+    flow:'paginated', spread:'none'
   });
-
-  // Inject styles via hook — fires per-chapter, faster than global theme registration
-  epubRendition.hooks.content.register(contents=>{
-    contents.addStylesheetRules({
-      'body':{
-        'font-family':'"Noto Serif SC",Georgia,serif !important',
-        'font-size':fsVal+'px !important',
-        'line-height':lhVal+' !important',
-        'padding':'36px 40px !important',
-        'max-width':'680px !important',
-        'margin':'0 auto !important',
-        'color':'inherit !important',
-        'background':'transparent !important'
-      },
-      'p':{ 'margin-bottom':'1.3em !important' },
-      'img':{ 'max-width':'100% !important','height':'auto !important' }
-    });
+  
+  // Apply theme to epub
+  epubRendition.themes.register('folio',{
+    body:{ 'font-family':'"Noto Serif SC",Georgia,serif','font-size':fsVal+'px','line-height':lhVal,'background':'var(--surface, #fff)','color':'var(--text, #1a1612)','padding':'40px 48px!important','max-width':'680px','margin':'0 auto' }
   });
-
+  epubRendition.themes.select('folio');
+  
+  const prog = (meta.prog||0)/100;
+  await epubBook.ready;
+  
+  // Chapters
+  const toc = epubBook.navigation.toc;
+  renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
+  
+  if(prog>0){
+    const cfi = await epubBook.locations.cfiFromPercentage(prog);
+    epubRendition.display(cfi);
+  } else {
+    epubRendition.display();
+  }
+  
   epubRendition.on('relocated', loc=>{
-    const p = typeof loc.start.percentage==='number'
-      ? Math.round(loc.start.percentage*100)
-      : Math.round(meta.prog||0);
+    const p = Math.round(loc.start.percentage*100);
     setProgBar(p);
-    if(currentBook){
-      currentBook.prog=p;
-      currentBook.epubCfi=loc.start.cfi;
-      saveBook(currentBook);
-    }
+    if(currentBook){ currentBook.prog=p; saveBook(currentBook) }
   });
-
-  setLoadingProgress(55,'正在渲染 EPUB');
-
-  // Start display and load TOC in parallel — don't wait for ready before displaying
-  const displayPromise = epubRendition.display(meta.epubCfi||undefined).catch(()=>'display-error');
-
-  // Load TOC asynchronously without blocking first render
-  epubBook.ready.then(()=>{
-    const toc = epubBook.navigation&&epubBook.navigation.toc ? epubBook.navigation.toc : [];
-    renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
-  }).catch(()=>{});
-
-  const result = await waitWithTimeout(displayPromise, 14000, 'timeout');
-  if(result==='display-error') throw new Error('完整 EPUB 渲染失败，请尝试快速文本模式');
-  if(result==='timeout') toast('完整模式加载较慢，可点顶部书本图标切换快速模式','warn');
-
-  setLoadingProgress(96,'完成');
-}
-
-async function openEpubLazy(ab, meta){
-  cleanupEpub();
-  epubMode = 'lazy';
-  const modeBtn = document.getElementById('btnEpubMode');
-  modeBtn.classList.add('active');
-  modeBtn.title = '大书模式：按章节读取，避免一次性解析整本 EPUB';
-  setLoadingProgress(30,'正在读取 EPUB 结构');
-  const zip = await JSZip.loadAsync(ab);
-  const opfPath = await getOpfPath(zip);
-  if(!opfPath) throw new Error('找不到 EPUB 目录文件');
-  const opfText = await zip.file(opfPath).async('text');
-  const doc = new DOMParser().parseFromString(opfText,'application/xml');
-  const manifest = {};
-  doc.querySelectorAll('manifest item').forEach(item=>{
-    const id = item.getAttribute('id');
-    if(!id) return;
-    manifest[id] = {
-      path: resolvePath(opfPath,item.getAttribute('href')||''),
-      mediaType: item.getAttribute('media-type')||''
-    };
-  });
-  const spine = [...doc.querySelectorAll('spine itemref')]
-    .map(item=>manifest[item.getAttribute('idref')])
-    .filter(Boolean);
-  if(!spine.length) throw new Error('EPUB 没有可读取的正文');
-  lazyEpub = {zip, meta, spine, index:0};
-  renderChapters(spine.map((item,i)=>({label:chapterLabel(item.path,i),index:i})), (i)=>{ renderLazyEpubChapter(i); toggleChapters() });
-  document.getElementById('txtArea').style.display='block';
-  document.getElementById('epubFrame').style.display='none';
-  document.getElementById('pdfArea').style.display='none';
-  document.getElementById('pdfNav').style.display='none';
-  document.getElementById('readerBookTitle').textContent = meta.title + ' · 大书模式';
-  setLoadingProgress(65,'正在读取当前章节');
-  const start = Math.max(0,Math.min(spine.length-1,Math.round((meta.prog||0)/100*(spine.length-1))));
-  await renderLazyEpubChapter(start);
-  toast('已使用大书模式：按章节读取 EPUB','success');
-}
-
-function safeDecode(s){
-  try{ return decodeURIComponent(s) }catch(e){ return s }
-}
-function chapterLabel(path, index){
-  const name = safeDecode((path||'').split('/').pop()||'').replace(/\.[^.]+$/,'');
-  return name || ('第 '+(index+1)+' 章');
-}
-function zipFile(zip, path){
-  if(!path) return null;
-  const plain = path.split('#')[0].replace(/^\/+/, '');
-  return zip.file(plain) || zip.file(safeDecode(plain));
-}
-function mimeFromPath(path){
-  const ext = (path.split('.').pop()||'').toLowerCase();
-  if(ext==='jpg'||ext==='jpeg') return 'image/jpeg';
-  if(ext==='png') return 'image/png';
-  if(ext==='gif') return 'image/gif';
-  if(ext==='webp') return 'image/webp';
-  if(ext==='svg') return 'image/svg+xml';
-  return 'application/octet-stream';
-}
-async function blobUrlFromZip(path, mediaType){
-  const file = zipFile(lazyEpub.zip,path);
-  if(!file) return '';
-  const blob = await file.async('blob');
-  const typed = blob.type ? blob : new Blob([blob],{type:mediaType||mimeFromPath(path)});
-  const url = URL.createObjectURL(typed);
-  lazyBlobUrls.push(url);
-  return url;
-}
-async function renderLazyEpubChapter(index){
-  if(!lazyEpub) return;
-  lazyBlobUrls.forEach(url=>URL.revokeObjectURL(url));
-  lazyBlobUrls = [];
-  index = Math.max(0,Math.min(lazyEpub.spine.length-1,index));
-  lazyEpub.index = index;
-  const item = lazyEpub.spine[index];
-  const file = zipFile(lazyEpub.zip,item.path);
-  if(!file) throw new Error('找不到当前章节文件');
-  const html = await file.async('text');
-  const doc = new DOMParser().parseFromString(html,'text/html');
-  doc.querySelectorAll('script,style,nav,svg').forEach(n=>n.remove());
-  const title = (doc.querySelector('h1,h2,h3,title')?.textContent||chapterLabel(item.path,index)).trim();
-  const content = document.getElementById('txtContent');
-  content.innerHTML = '';
-  const h = document.createElement('h2');
-  h.textContent = title;
-  content.appendChild(h);
-  const nodes = doc.body ? [...doc.body.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,pre,img')] : [];
-  // Use DocumentFragment for batch DOM insertion (no reflow per node)
-  const frag = document.createDocumentFragment();
-  const imgPromises = [];
-  for(const node of nodes){
-    if(node.tagName==='IMG'){
-      const src = node.getAttribute('src')||node.getAttribute('data-src')||'';
-      const img = document.createElement('img');
-      img.alt = node.getAttribute('alt')||'';
-      img.style.maxWidth='100%';
-      frag.appendChild(img);
-      if(/^data:/i.test(src)){
-        img.src = src;
-      } else {
-        // Resolve all images in parallel
-        const imgPath = resolvePath(item.path,src);
-        const mime = node.getAttribute('type')||'';
-        imgPromises.push(blobUrlFromZip(imgPath,mime).then(url=>{ if(url) img.src=url; }));
-      }
-      continue;
-    }
-    const value = node.textContent.replace(/\s+/g,' ').trim();
-    if(!value || value===title) continue;
-    const el = document.createElement(/^H[1-4]$/.test(node.tagName)?'h2':'p');
-    el.textContent = node.tagName==='LI' ? '- '+value : value;
-    frag.appendChild(el);
-  }
-  content.appendChild(frag);
-  // Load images in parallel after DOM is shown
-  if(imgPromises.length) Promise.all(imgPromises).catch(()=>{});
-  if(content.children.length<=1 && doc.body){
-    const p = document.createElement('p');
-    p.textContent = doc.body.textContent.replace(/\s+/g,' ').trim();
-    content.appendChild(p);
-  }
-  document.getElementById('txtArea').scrollTop=0;
-  document.getElementById('cpList').querySelectorAll('.cp-item').forEach((el,i)=>el.classList.toggle('active',i===index));
-  const prog = Math.round(index/(lazyEpub.spine.length-1||1)*100);
-  setProgBar(prog);
-  if(currentBook){ currentBook.prog=prog; saveBook(currentBook) }
-  document.getElementById('readerBookTitle').textContent = currentBook.title + ' · 大书模式 · ' + title;
-  applyReaderSettings();
-}
-function lazyNext(){ if(lazyEpub&&lazyEpub.index<lazyEpub.spine.length-1) renderLazyEpubChapter(lazyEpub.index+1) }
-function lazyPrev(){ if(lazyEpub&&lazyEpub.index>0) renderLazyEpubChapter(lazyEpub.index-1) }
-
-function showTextChapters(chapters, meta, label){
-  txtChunks = chapters;
-  txtChunk = Math.max(0,Math.min(chapters.length-1,Math.round((meta.prog||0)/100*(chapters.length-1))));
-  renderChapters(chapters.map((c,i)=>({label:c.title,index:i})), (i)=>{ txtChunk=i; renderTxtChunk(); toggleChapters() });
-  document.getElementById('txtArea').style.display='block';
-  document.getElementById('epubFrame').style.display='none';
-  if(label) document.getElementById('readerBookTitle').textContent = `${meta.title} · ${label} 快速模式`;
-  renderTxtChunk();
-}
-
-function epubHtmlToChapter(html, index){
-  const doc = new DOMParser().parseFromString(html,'text/html');
-  doc.querySelectorAll('script,style,nav,svg').forEach(n=>n.remove());
-  let title = '';
-  const heading = doc.querySelector('h1,h2,h3,title');
-  if(heading) title = heading.textContent.trim();
-  if(!title) title = '第 '+(index+1)+' 节';
-  const nodes = doc.body ? doc.body.querySelectorAll('h1,h2,h3,h4,p,li,blockquote') : [];
-  const paras = [];
-  let last = '';
-  nodes.forEach(node=>{
-    const text = node.textContent.replace(/\s+/g,' ').trim();
-    if(text && text!==title && text!==last && text.length>1){
-      paras.push(text);
-      last = text;
-    }
-  });
-  if(!paras.length && doc.body){
-    const text = doc.body.textContent.replace(/\s+/g,' ').trim();
-    if(text) paras.push(text);
-  }
-  return {title, paras};
 }
 
 // ─── TXT ──────────────────────────────────────────────────────────
-async function openTxt(ab, meta){
-  const cached = await getChapterCache(meta);
-  if(cached&&cached.chapters&&cached.chapters.length){
-    setLoadingProgress(88,'正在读取 TXT 缓存');
-    showTextChapters(cached.chapters, meta, 'TXT');
-    return;
+function openTxt(ab, meta){
+  const dec = new TextDecoder('utf-8');
+  let text = dec.decode(ab);
+  
+  // Try GB18030 if garbled
+  if(text.includes('�')){
+    try{
+      const dec2 = new TextDecoder('gb18030');
+      text = dec2.decode(ab);
+    }catch(e){}
   }
-  let text = decodeTextFile(ab);
   
   // Split into paragraphs and chunk
   const paras = text.split(/\n+/).filter(p=>p.trim());
@@ -1464,45 +883,26 @@ async function openTxt(ab, meta){
   });
   if(curChapter.paras.length) chapters.push(curChapter);
   
-  await saveChapterCache(meta, chapters);
-  showTextChapters(chapters, meta, 'TXT');
+  txtChunks = chapters;
+  txtChunk = Math.round((meta.prog||0)/100*(chapters.length-1));
+  
+  renderChapters(chapters.map((c,i)=>({label:c.title,index:i})), (i)=>{ txtChunk=i; renderTxtChunk(); toggleChapters() });
+  
+  document.getElementById('txtArea').style.display='block';
+  renderTxtChunk();
 }
 
 function renderTxtChunk(){
   const ch = txtChunks[txtChunk];
   if(!ch) return;
   const el = document.getElementById('txtContent');
-  // Use DocumentFragment: single DOM insertion = no layout thrash per paragraph
-  const frag = document.createDocumentFragment();
-  const h = document.createElement('h2');
-  h.textContent = ch.title;
-  frag.appendChild(h);
-  for(const p of ch.paras){
-    const pel = document.createElement('p');
-    pel.textContent = p;
-    frag.appendChild(pel);
-  }
-  el.innerHTML = '';
-  el.appendChild(frag);
+  el.innerHTML = `<h2>${ch.title}</h2>`+ ch.paras.map(p=>`<p>${escHtml(p)}</p>`).join('');
   document.getElementById('txtArea').scrollTop=0;
   const prog = Math.round(txtChunk/(txtChunks.length-1||1)*100);
   setProgBar(prog);
   if(currentBook){ currentBook.prog=prog; saveBook(currentBook) }
   document.getElementById('cpList').querySelectorAll('.cp-item').forEach((el,i)=>el.classList.toggle('active',i===txtChunk));
   applyReaderSettings();
-}
-
-function decodeTextFile(ab){
-  const bytes = new Uint8Array(ab);
-  if(bytes[0]===0xEF && bytes[1]===0xBB && bytes[2]===0xBF) return new TextDecoder('utf-8').decode(bytes.slice(3));
-  if(bytes[0]===0xFF && bytes[1]===0xFE) return new TextDecoder('utf-16le').decode(bytes.slice(2));
-  if(bytes[0]===0xFE && bytes[1]===0xFF) return new TextDecoder('utf-16be').decode(bytes.slice(2));
-  try{
-    return new TextDecoder('utf-8',{fatal:true}).decode(ab);
-  }catch(e){
-    try{ return new TextDecoder('gb18030').decode(ab) }
-    catch(err){ return new TextDecoder('utf-8').decode(ab) }
-  }
 }
 
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
@@ -1547,8 +947,6 @@ async function renderPdfPage(){
 }
 function pdfNext(){ if(pdfPage<pdfTotal){ pdfPage++; renderPdfPage() } }
 function pdfPrev(){ if(pdfPage>1){ pdfPage--; renderPdfPage() } }
-function textNext(){ if(txtChunk<txtChunks.length-1){ txtChunk++; renderTxtChunk() } }
-function textPrev(){ if(txtChunk>0){ txtChunk--; renderTxtChunk() } }
 
 // ─── Chapters Panel ───────────────────────────────────────────────
 function renderChapters(items, onSelect){
@@ -1578,7 +976,7 @@ function toggleSearch(){
 }
 function doSearch(){
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
-  if(!q||!currentBook||!['txt','epub'].includes(currentBook.type)) return;
+  if(!q||!currentBook||currentBook.type!=='txt') return;
   const el = document.getElementById('txtContent');
   el.querySelectorAll('mark').forEach(m=>m.replaceWith(m.textContent));
   if(!q) return;
@@ -1586,10 +984,7 @@ function doSearch(){
   const first = el.querySelector('mark');
   if(first) first.scrollIntoView({behavior:'smooth',block:'center'});
 }
-function clearSearch(){
-  if(currentBook?.type==='epub'&&epubMode==='lazy') renderLazyEpubChapter(lazyEpub?.index||0);
-  else if(currentBook&&['txt','epub'].includes(currentBook.type)) renderTxtChunk();
-}
+function clearSearch(){ if(currentBook&&currentBook.type==='txt') renderTxtChunk() }
 function escRegex(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') }
 
 // ─── Progress ─────────────────────────────────────────────────────
@@ -1607,14 +1002,15 @@ function setProgBar(pct){
 function seekProg(e){
   if(!currentBook) return;
   const pct = e.offsetX/e.currentTarget.offsetWidth;
-  if(currentBook.type==='epub'&&epubMode==='lazy'&&lazyEpub){
-    renderLazyEpubChapter(Math.round(pct*(lazyEpub.spine.length-1)));
-  } else if(currentBook.type==='txt'||currentBook.type==='epub'){
+  if(currentBook.type==='txt'){
     const idx = Math.round(pct*(txtChunks.length-1));
     txtChunk=idx; renderTxtChunk();
   } else if(currentBook.type==='pdf'){
     pdfPage=Math.max(1,Math.min(pdfTotal,Math.round(pct*(pdfTotal-1))+1));
     renderPdfPage();
+  } else if(currentBook.type==='epub' && epubBook){
+    epubBook.locations.percentageFromCfi(null).then?null:null;
+    epubRendition&&epubRendition.display(epubBook.locations.cfiFromPercentage(pct));
   }
 }
 
@@ -1668,7 +1064,7 @@ function showLibrary(){
   searchOpen=false; chaptersOpen=false;
   document.getElementById('chaptersPanel').classList.remove('open');
   currentBook=null;
-  cleanupEpub();
+  if(epubBook){ try{epubBook.destroy()}catch(e){} epubBook=null }
   renderLibrary(); renderSidebar();
 }
 function setNav(v){
@@ -1687,20 +1083,8 @@ function onDragLeave(){ document.getElementById('dropZone').classList.remove('dr
 function onDrop(e){ e.preventDefault(); onDragLeave(); handleFiles(e.dataTransfer.files) }
 
 // ─── Loading ─────────────────────────────────────────────────────
-function showLoading(txt, pct=0){
-  document.getElementById('loadingTxt').textContent=txt||'加载中…';
-  document.getElementById('loadingOverlay').classList.add('show');
-  setLoadingProgress(pct);
-}
-function setLoadingProgress(pct, txt){
-  const val = Math.max(0,Math.min(100,Math.round(pct||0)));
-  document.getElementById('loadingProgressFill').style.width=val+'%';
-  if(txt) document.getElementById('loadingTxt').textContent=txt+' '+val+'%';
-}
-function hideLoading(){
-  setLoadingProgress(100);
-  setTimeout(()=>document.getElementById('loadingOverlay').classList.remove('show'),120);
-}
+function showLoading(txt){ document.getElementById('loadingTxt').textContent=txt||'加载中…'; document.getElementById('loadingOverlay').classList.add('show') }
+function hideLoading(){ document.getElementById('loadingOverlay').classList.remove('show') }
 
 // ─── Toast ───────────────────────────────────────────────────────
 let toastT;
@@ -1716,7 +1100,7 @@ function toast(msg, type){
 // NOTE: Replace with your actual Google OAuth2 Client ID
 const GOOGLE_CLIENT_ID = '620758146458-6no9mc05e1j2s7f04tcnqrl74n5c2ti1.apps.googleusercontent.com';
 const DRIVE_FOLDER = 'Folio 书库';
-const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
 function handleDriveAuth(){
   if(driveConnected){ disconnectDrive(); return; }
@@ -1748,7 +1132,6 @@ function startDriveAuth(){
       driveToken=res.access_token;
       driveConnected=true;
       updateDriveUI();
-      loadDriveUser();
       toast('Google Drive 已连接，书库将自动同步','success');
       syncAllToDrive();
     }
@@ -1757,69 +1140,17 @@ function startDriveAuth(){
 
 function disconnectDrive(){
   driveConnected=false; driveToken=null;
-  saveStore();
   updateDriveUI();
   toast('已断开 Google Drive','');
-}
-
-function logoutDriveAccount(e){
-  if(e) e.stopPropagation();
-  const oldToken = driveToken;
-  driveConnected=false;
-  driveToken=null;
-  driveUser=null;
-  delete store.driveUser;
-  saveStore();
-  if(oldToken && typeof google!=='undefined' && google.accounts&&google.accounts.oauth2){
-    try{ google.accounts.oauth2.revoke(oldToken,()=>{}) }catch(err){}
-  }
-  updateDriveUI();
-  toast('已退出账号','success');
 }
 
 function updateDriveUI(){
   const btn=document.getElementById('driveBtn');
   const txt=document.getElementById('driveBtnTxt');
   const status=document.getElementById('driveStatus');
-  const card=document.getElementById('accountCard');
-  const avatar=document.getElementById('accountAvatar');
-  const name=document.getElementById('accountName');
-  const email=document.getElementById('accountEmail');
   btn.classList.toggle('connected',driveConnected);
-  txt.textContent=driveConnected?'已连接 Google Drive':(driveUser?'重新连接 Google Drive':'连接 Google Drive');
-  status.textContent=driveConnected?'书库已启用云端同步':(driveUser?'已记住账号，刷新后需重新授权同步':'');
-  card.classList.toggle('show',!!driveUser);
-  if(driveUser){
-    const displayName = driveUser.name||driveUser.email||'Google 账号';
-    name.textContent=displayName;
-    email.textContent=driveUser.email||'';
-    avatar.innerHTML='';
-    if(driveUser.picture){
-      const img=document.createElement('img');
-      img.src=driveUser.picture;
-      img.alt='';
-      avatar.appendChild(img);
-    } else {
-      avatar.textContent=(displayName.trim()[0]||'G').toUpperCase();
-    }
-  } else {
-    avatar.textContent='G';
-    name.textContent='Google 账号';
-    email.textContent='';
-  }
-}
-
-async function loadDriveUser(){
-  if(!driveToken) return;
-  try{
-    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{
-      headers:{Authorization:'Bearer '+driveToken}
-    });
-    if(!res.ok) return;
-    driveUser = await res.json();
-    saveStore();
-    updateDriveUI();
-  }catch(e){ console.error('Account load error',e) }
+  txt.textContent=driveConnected?'已连接 Google Drive':'连接 Google Drive';
+  status.textContent=driveConnected?'书库已启用云端同步':'';
 }
 
 async function syncToDrive(id, ab, meta){
@@ -1863,15 +1194,8 @@ function gFetch(url,opts={}){
 openIDB().then(()=>{
   renderLibrary();
   renderSidebar();
-  updateDriveUI();
   // Set default theme button active
   document.querySelector('.t-light').classList.add('active');
-}).catch(()=>{
-  renderLibrary();
-  renderSidebar();
-  updateDriveUI();
-  document.querySelector('.t-light').classList.add('active');
-  toast('本地书库初始化失败，请检查浏览器存储权限或剩余空间','warn');
 });
 
 // Keyboard shortcuts
@@ -1879,12 +1203,8 @@ document.addEventListener('keydown', e=>{
   if(e.target.tagName==='INPUT') return;
   if(e.key==='ArrowRight'&&currentBook?.type==='pdf') pdfNext();
   if(e.key==='ArrowLeft'&&currentBook?.type==='pdf') pdfPrev();
-  if(e.key==='ArrowRight'&&currentBook?.type==='epub'&&epubMode==='full'&&epubRendition) epubRendition.next();
-  else if(e.key==='ArrowRight'&&currentBook?.type==='epub'&&epubMode==='lazy') lazyNext();
-  else if(e.key==='ArrowRight'&&(currentBook?.type==='epub'||currentBook?.type==='txt')) textNext();
-  if(e.key==='ArrowLeft'&&currentBook?.type==='epub'&&epubMode==='full'&&epubRendition) epubRendition.prev();
-  else if(e.key==='ArrowLeft'&&currentBook?.type==='epub'&&epubMode==='lazy') lazyPrev();
-  else if(e.key==='ArrowLeft'&&(currentBook?.type==='epub'||currentBook?.type==='txt')) textPrev();
+  if(e.key==='ArrowRight'&&currentBook?.type==='epub') epubRendition&&epubRendition.next();
+  if(e.key==='ArrowLeft'&&currentBook?.type==='epub') epubRendition&&epubRendition.prev();
   if(e.key==='Escape'){ if(chaptersOpen)toggleChapters(); if(searchOpen)toggleSearch(); }
   if((e.ctrlKey||e.metaKey)&&e.key==='f'&&currentBook){ e.preventDefault(); toggleSearch() }
 });
