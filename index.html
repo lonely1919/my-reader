@@ -9,179 +9,456 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+</script>
 <style>
-* {box-sizing:border-box; margin:0; padding:0}
-:root {
-  --bg:#f7f4ef; --surface:#ffffff; --surface2:#f0ece4; --border:#e0d8cc;
-  --text:#1a1612; --text2:#6b6057; --text3:#a09288;
-  --accent:#c0392b; --accent2:#e74c3c;
-  --sidebar:260px; --serif:'Noto Serif SC',Georgia,serif;
+/* ── Reset & Base ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f7f4ef;
+  --surface:#ffffff;
+  --surface2:#f0ece4;
+  --border:#e0d8cc;
+  --text:#1a1612;
+  --text2:#6b6057;
+  --text3:#a09288;
+  --accent:#c0392b;
+  --accent2:#e74c3c;
+  --sidebar:260px;
+  --serif:'Noto Serif SC',Georgia,serif;
   --sans:'Noto Sans SC','PingFang SC',sans-serif;
-  --radius:10px; --transition:0.2s ease;
+  --radius:10px;
+  --transition:0.2s ease;
 }
-[data-theme="dark"] {
-  --bg:#161412; --surface:#1e1b18; --surface2:#252017; --border:#2e2a24;
-  --text:#e8e0d4; --text2:#a09288; --text3:#665c54;
+[data-theme="dark"]{
+  --bg:#161412;
+  --surface:#1e1b18;
+  --surface2:#252017;
+  --border:#2e2a24;
+  --text:#e8e0d4;
+  --text2:#a09288;
+  --text3:#665c54;
 }
-[data-theme="sepia"] {
-  --bg:#f2e8d4; --surface:#fdf6e3; --surface2:#e8dcc4; --border:#d4c4a8;
-  --text:#3b2f1e; --text2:#7a6248; --text3:#a8937a;
+[data-theme="sepia"]{
+  --bg:#f2e8d4;
+  --surface:#fdf6e3;
+  --surface2:#e8dcc4;
+  --border:#d4c4a8;
+  --text:#3b2f1e;
+  --text2:#7a6248;
+  --text3:#a8937a;
 }
-html,body {height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:var(--sans)}
-button {cursor:pointer; background:none; border:none; color:inherit; font-family:inherit}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--sans)}
+button{cursor:pointer;background:none;border:none;color:inherit;font-family:inherit}
 
-.app {display:flex; height:100vh; overflow:hidden}
-.sidebar {width:var(--sidebar); flex-shrink:0; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; transition:transform var(--transition); z-index:100}
-.sidebar-head {padding:20px 16px 14px; border-bottom:1px solid var(--border); flex-shrink:0}
-.logo {display:flex; align-items:center; gap:8px; font-family:var(--serif); font-size:20px; font-weight:600; color:var(--text); letter-spacing:-.5px; margin-bottom:14px}
-.logo span {color:var(--accent); font-size:22px}
-.drive-btn {width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius); display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text2); background:var(--surface2); transition:all var(--transition)}
-.drive-btn:hover {border-color:var(--accent); color:var(--text)}
-.drive-btn.connected {background:#e8f5e9; border-color:#81c784; color:#2e7d32}
-[data-theme="dark"] .drive-btn.connected {background:#1b2e1c; border-color:#388e3c; color:#81c784}
-.sidebar-nav {padding:10px 8px; border-bottom:1px solid var(--border); flex-shrink:0}
-.nav-item {display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; font-size:13.5px; color:var(--text2); transition:all var(--transition)}
-.nav-item:hover {background:var(--surface2); color:var(--text)}
-.nav-item.active {background:var(--surface2); color:var(--text); font-weight:500}
-.book-list {flex:1; overflow-y:auto; padding:8px}
-.book-list::-webkit-scrollbar {width:3px}
-.book-list::-webkit-scrollbar-thumb {background:var(--border); border-radius:2px}
-.sl-label {font-size:11px; color:var(--text3); padding:8px 10px 4px; letter-spacing:.06em; text-transform:uppercase}
-.sl-item {display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:8px; cursor:pointer; transition:background var(--transition); position:relative}
-.sl-item:hover {background:var(--surface2)}
-.sl-item.active {background:var(--surface2)}
-.sl-item-del {display:none; position:absolute; right:6px; top:50%; transform:translateY(-50%); padding:4px; cursor:pointer; color:var(--text3)}
-.sl-item:hover .sl-item-del {display:block}
-.sl-cover {width:34px; height:48px; border-radius:4px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:20px; border:1px solid var(--border); background:var(--surface2)}
-.sl-info {flex:1; min-width:0}
-.sl-title {font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.sl-prog {height:2px; background:var(--border); border-radius:1px; margin-top:5px}
-.sl-prog-fill {height:100%; border-radius:1px; background:var(--accent); transition:width .3s}
+/* ── Layout ── */
+.app{display:flex;height:100vh;overflow:hidden}
 
-.main {flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; position:relative}
-.topbar {height:50px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 12px; gap:8px; flex-shrink:0}
-.menu-btn {display:none; padding:6px; border-radius:8px; color:var(--text2); transition:all var(--transition)}
-.menu-btn:hover {background:var(--surface2); color:var(--text)}
-.topbar-title {flex:1; font-size:14px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.topbar-actions {display:flex; align-items:center; gap:2px}
-.tb-btn {padding:7px; border-radius:8px; color:var(--text2); transition:all var(--transition); display:flex; align-items:center; justify-content:center}
-.tb-btn:hover {background:var(--surface2); color:var(--text)}
-.tb-btn.active {color:var(--accent)}
+/* ── Sidebar ── */
+.sidebar{
+  width:var(--sidebar);flex-shrink:0;
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  transition:transform var(--transition);
+  z-index:100;
+}
+.sidebar-head{
+  padding:20px 16px 14px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.logo{
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--serif);font-size:20px;font-weight:600;
+  color:var(--text);letter-spacing:-.5px;margin-bottom:14px;
+}
+.logo span{color:var(--accent);font-size:22px}
+.drive-area{display:flex;flex-direction:column;gap:6px}
+.drive-btn{
+  width:100%;padding:8px 12px;
+  border:1px solid var(--border);border-radius:var(--radius);
+  display:flex;align-items:center;gap:8px;
+  font-size:13px;font-family:var(--sans);
+  color:var(--text2);background:var(--surface2);
+  transition:all var(--transition);
+}
+.drive-btn:hover{border-color:var(--accent);color:var(--text)}
+.drive-btn.connected{background:#e8f5e9;border-color:#81c784;color:#2e7d32}
+[data-theme="dark"] .drive-btn.connected{background:#1b2e1c;border-color:#388e3c;color:#81c784}
+.drive-btn svg{flex-shrink:0}
+.drive-status{font-size:11px;color:var(--text3);text-align:center;padding:2px 0}
+.sidebar-nav{padding:10px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
+.nav-item{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 10px;border-radius:8px;
+  font-size:13.5px;color:var(--text2);
+  transition:all var(--transition);cursor:pointer;
+}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--surface2);color:var(--text);font-weight:500}
+.nav-item svg{flex-shrink:0;opacity:.7}
+.nav-item.active svg{opacity:1}
+.book-list{flex:1;overflow-y:auto;padding:8px}
+.book-list::-webkit-scrollbar{width:3px}
+.book-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.sl-label{font-size:11px;color:var(--text3);padding:8px 10px 4px;letter-spacing:.06em;text-transform:uppercase}
+.sl-item{
+  display:flex;align-items:center;gap:9px;
+  padding:8px 10px;border-radius:8px;
+  cursor:pointer;transition:background var(--transition);
+  position:relative;
+}
+.sl-item:hover{background:var(--surface2)}
+.sl-item.active{background:var(--surface2)}
+.sl-item-delete{
+  display:none;
+  padding:4px;color:var(--text3);opacity:0.6;
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+}
+.sl-item:hover .sl-item-delete{display:block}
+.sl-item-delete:hover{color:var(--accent);opacity:1}
+.sl-cover{
+  width:34px;height:48px;border-radius:4px;
+  flex-shrink:0;display:flex;align-items:center;
+  justify-content:center;font-size:20px;
+  border:1px solid var(--border);background:var(--surface2);
+}
+.sl-info{flex:1;min-width:0}
+.sl-title{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sl-author{font-size:11px;color:var(--text3);margin-top:1px}
+.sl-prog{height:2px;background:var(--border);border-radius:1px;margin-top:5px}
+.sl-prog-fill{height:100%;border-radius:1px;background:var(--accent);transition:width .3s}
 
-.view {flex:1; overflow:hidden; display:flex; flex-direction:column}
-.library-view {overflow-y:auto; padding:24px}
-.library-view::-webkit-scrollbar {width:4px}
-.library-view::-webkit-scrollbar-thumb {background:var(--border); border-radius:2px}
-.drop-zone {border:2px dashed var(--border); border-radius:14px; padding:36px 24px; text-align:center; cursor:pointer; transition:all var(--transition); margin-bottom:28px; background:var(--surface)}
-.drop-zone:hover, .drop-zone.drag-over {border-color:var(--accent); background:var(--surface2)}
-.drop-icon {width:52px; height:52px; border-radius:50%; background:var(--surface2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; margin:0 auto 14px}
-.drop-title {font-size:15px; font-weight:500; margin-bottom:6px}
-.drop-sub {font-size:12.5px; color:var(--text2); margin-bottom:14px; line-height:1.6}
-.fmt-badge {font-size:11px; padding:3px 8px; border-radius:20px; background:var(--surface2); border:1px solid var(--border); color:var(--text2); font-weight:500}
-.section-hd {display:flex; align-items:center; justify-content:space-between; margin-bottom:14px}
-.section-title {font-size:16px; font-weight:600; font-family:var(--serif)}
-.section-count {font-size:12px; color:var(--text3)}
-.grid {display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:14px; margin-bottom:32px}
-.book-tile {cursor:pointer; border-radius:10px; overflow:hidden; background:var(--surface); border:1px solid var(--border); transition:all var(--transition); position:relative}
-.book-tile:hover {border-color:var(--accent); transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,.1)}
-.tile-del-btn {position:absolute; top:6px; right:6px; display:none; width:28px; height:28px; background:var(--accent); color:#fff; border-radius:50%; align-items:center; justify-content:center; cursor:pointer; z-index:10; font-size:16px}
-.book-tile:hover .tile-del-btn {display:flex}
-.tile-cover {height:160px; display:flex; align-items:center; justify-content:center; font-size:46px; position:relative; border-bottom:1px solid var(--border)}
-.tile-badge {position:absolute; top:7px; right:7px; font-size:10px; padding:2px 6px; border-radius:10px; background:var(--accent); color:#fff; font-weight:500}
-.tile-body {padding:9px 9px 11px}
-.tile-title {font-size:12.5px; font-weight:500; margin-bottom:2px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical}
-.tile-author {font-size:11px; color:var(--text3)}
-.tile-bar {height:2px; background:var(--border); border-radius:1px; margin-top:8px}
-.tile-fill {height:100%; border-radius:1px; background:var(--accent)}
-.empty-state {text-align:center; padding:60px 24px; color:var(--text2)}
-.empty-state svg {opacity:.3; margin-bottom:12px}
-.empty-state p {font-size:14px}
+/* ── Main ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{
+  height:50px;background:var(--surface);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;
+  padding:0 12px;gap:8px;flex-shrink:0;
+}
+.menu-btn{
+  display:none;padding:6px;border-radius:8px;
+  color:var(--text2);transition:all var(--transition);
+}
+.menu-btn:hover{background:var(--surface2);color:var(--text)}
+.topbar-title{
+  flex:1;font-size:14px;font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.topbar-actions{display:flex;align-items:center;gap:2px}
+.tb-btn{
+  padding:7px;border-radius:8px;
+  color:var(--text2);transition:all var(--transition);
+  display:flex;align-items:center;justify-content:center;
+}
+.tb-btn:hover{background:var(--surface2);color:var(--text)}
+.tb-btn.active{color:var(--accent)}
 
-.reader-view {display:none; flex:1; flex-direction:column; overflow:hidden}
-.reader-view.active {display:flex}
-.reader-toolbar {padding:8px 14px; border-bottom:1px solid var(--border); background:var(--surface); display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex-shrink:0}
-.rt-group {display:flex; align-items:center; gap:4px}
-.rt-sep {width:1px; height:18px; background:var(--border); margin:0 4px}
-.rt-lbl {font-size:11px; color:var(--text3); min-width:24px; text-align:center}
-.theme-btn {width:24px; height:24px; border-radius:50%; border:2px solid var(--border); cursor:pointer; transition:border-color var(--transition); flex-shrink:0}
-.theme-btn:hover, .theme-btn.active {border-color:var(--accent)}
-.theme-btn.t-light {background:#f7f4ef}
-.theme-btn.t-dark {background:#161412}
-.theme-btn.t-sepia {background:#f2e8d4}
+/* ── Library View ── */
+.view{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.library-view{overflow-y:auto;padding:24px}
+.library-view::-webkit-scrollbar{width:4px}
+.library-view::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.drop-zone{
+  border:2px dashed var(--border);border-radius:14px;
+  padding:36px 24px;text-align:center;
+  cursor:pointer;transition:all var(--transition);margin-bottom:28px;
+  background:var(--surface);
+}
+.drop-zone:hover,.drop-zone.drag-over{
+  border-color:var(--accent);background:var(--surface2);
+}
+.drop-icon{
+  width:52px;height:52px;border-radius:50%;
+  background:var(--surface2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 14px;
+}
+.drop-title{font-size:15px;font-weight:500;margin-bottom:6px}
+.drop-sub{font-size:12.5px;color:var(--text2);margin-bottom:14px;line-height:1.6}
+.drop-formats{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.fmt-badge{
+  font-size:11px;padding:3px 8px;border-radius:20px;
+  background:var(--surface2);border:1px solid var(--border);
+  color:var(--text2);font-weight:500;letter-spacing:.03em;
+}
+.section-hd{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:14px;
+}
+.section-title{font-size:16px;font-weight:600;font-family:var(--serif)}
+.section-count{font-size:12px;color:var(--text3)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:14px;margin-bottom:32px}
+.book-tile{
+  cursor:pointer;border-radius:10px;overflow:hidden;
+  background:var(--surface);border:1px solid var(--border);
+  transition:all var(--transition);
+  position:relative;
+}
+.book-tile:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
+.tile-delete-btn{
+  position:absolute;top:6px;right:6px;
+  display:none;
+  width:28px;height:28px;
+  background:var(--accent);color:#fff;
+  border-radius:50%;
+  align-items:center;justify-content:center;
+  cursor:pointer;
+  z-index:10;
+  font-size:16px;
+}
+.book-tile:hover .tile-delete-btn{display:flex}
+.tile-cover{
+  height:160px;display:flex;align-items:center;
+  justify-content:center;font-size:46px;
+  position:relative;border-bottom:1px solid var(--border);
+}
+.tile-badge{
+  position:absolute;top:7px;right:7px;
+  font-size:10px;padding:2px 6px;border-radius:10px;
+  font-family:var(--sans);background:var(--accent);color:#fff;
+  font-weight:500;
+}
+.tile-body{padding:9px 9px 11px}
+.tile-title{
+  font-size:12.5px;font-weight:500;margin-bottom:2px;
+  overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;
+}
+.tile-author{font-size:11px;color:var(--text3)}
+.tile-bar{height:2px;background:var(--border);border-radius:1px;margin-top:8px}
+.tile-fill{height:100%;border-radius:1px;background:var(--accent)}
+.empty-state{text-align:center;padding:60px 24px;color:var(--text2)}
+.empty-state svg{opacity:.3;margin-bottom:12px}
+.empty-state p{font-size:14px}
 
-#epubFrame {flex:1; border:none; background:var(--surface); display:none}
-.txt-area {flex:1; overflow-y:auto; padding:40px 24px; background:var(--surface); display:none}
-.txt-area::-webkit-scrollbar {width:4px}
-.txt-area::-webkit-scrollbar-thumb {background:var(--border); border-radius:2px}
-.txt-content {max-width:660px; margin:0 auto; font-family:var(--serif); line-height:1.9; color:var(--text)}
-.txt-content p {margin-bottom:1.4em; font-size:var(--fs,17px)}
-.txt-content h1, .txt-content h2 {font-family:var(--serif); margin-bottom:1.2em; margin-top:1.8em; font-weight:600; color:var(--text)}
+/* ── Reader View ── */
+.reader-view{display:none;flex:1;flex-direction:column;overflow:hidden;position:relative}
+.reader-view.active{display:flex}
+.reader-toolbar{
+  padding:8px 14px;border-bottom:1px solid var(--border);
+  background:var(--surface);
+  display:flex;align-items:center;gap:8px;
+  flex-wrap:wrap;flex-shrink:0;
+}
+.rt-group{display:flex;align-items:center;gap:4px}
+.rt-sep{width:1px;height:18px;background:var(--border);margin:0 4px}
+.rt-lbl{font-size:11px;color:var(--text3);min-width:24px;text-align:center}
+.theme-btn{
+  width:24px;height:24px;border-radius:50%;
+  border:2px solid var(--border);cursor:pointer;
+  transition:border-color var(--transition);flex-shrink:0;
+}
+.theme-btn:hover,.theme-btn.active{border-color:var(--accent)}
+.theme-btn.t-light{background:#f7f4ef}
+.theme-btn.t-dark{background:#161412}
+.theme-btn.t-sepia{background:#f2e8d4}
+#epubFrame{
+  flex:1;border:none;background:var(--surface);
+  display:none;
+}
+.txt-area{
+  flex:1;overflow-y:auto;padding:40px 24px;
+  background:var(--surface);
+}
+.txt-area.dual-page{
+  display:flex;
+  gap:20px;
+  padding:20px;
+}
+.txt-area.dual-page::-webkit-scrollbar{display:none}
+.dual-page-left,.dual-page-right{
+  flex:1;
+  overflow-y:auto;
+  padding:20px;
+  background:var(--surface);
+  border-radius:8px;
+}
+.dual-page-left::-webkit-scrollbar,
+.dual-page-right::-webkit-scrollbar{width:3px}
+.dual-page-left::-webkit-scrollbar-thumb,
+.dual-page-right::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.txt-area::-webkit-scrollbar{width:4px}
+.txt-area::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.txt-content{
+  max-width:660px;margin:0 auto;
+  font-family:var(--serif);
+  line-height:1.9;color:var(--text);
+}
+.txt-content p{margin-bottom:1.4em;font-size:var(--fs,17px)}
+.txt-content h1,.txt-content h2{
+  font-family:var(--serif);margin-bottom:1.2em;margin-top:1.8em;
+  font-weight:600;color:var(--text);
+}
+.pdf-area{
+  flex:1;overflow-y:auto;background:var(--surface);
+  display:flex;flex-direction:column;align-items:center;
+  padding:16px;gap:12px;
+}
+.pdf-area.dual-page{
+  flex-direction:row;
+  align-items:flex-start;
+}
+.pdf-area canvas{
+  max-width:100%;border:1px solid var(--border);
+  border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,.08);
+}
+.pdf-area.dual-page canvas{
+  flex:1;max-height:90vh;
+}
+.reader-footer{
+  padding:10px 16px;border-top:1px solid var(--border);
+  background:var(--surface);
+  display:flex;align-items:center;gap:12px;flex-shrink:0;
+  flex-wrap:wrap;
+}
+.prog-track{
+  flex:1;height:4px;background:var(--border);border-radius:2px;
+  cursor:pointer;position:relative;min-width:100px;
+}
+.prog-thumb{
+  height:100%;border-radius:2px;background:var(--accent);
+  transition:width .2s;pointer-events:none;
+}
+.prog-info{font-size:12px;color:var(--text3);white-space:nowrap;min-width:50px;text-align:right}
+.nav-arrows{display:flex;gap:4px}
+.arr-btn{
+  padding:5px 10px;border-radius:7px;font-size:13px;
+  background:var(--surface2);border:1px solid var(--border);
+  color:var(--text2);transition:all var(--transition);
+}
+.arr-btn:hover{border-color:var(--accent);color:var(--accent)}
 
-.pdf-area {flex:1; overflow:auto; background:var(--surface); display:flex; flex-direction:column; align-items:center; padding:16px; gap:12px; display:none}
-.pdf-area canvas {max-width:100%; border:1px solid var(--border); border-radius:4px; box-shadow:0 2px 12px rgba(0,0,0,.08)}
+/* ── Loading Overlay ── */
+.loading-overlay{
+  position:absolute;inset:0;
+  background:rgba(0,0,0,.35);
+  display:none;align-items:center;justify-content:center;
+  z-index:500;backdrop-filter:blur(2px);
+}
+.loading-overlay.show{display:flex}
+.loading-box{
+  background:var(--surface);border-radius:14px;
+  padding:32px 40px;text-align:center;
+  border:1px solid var(--border);
+}
+.spinner{
+  width:36px;height:36px;border:3px solid var(--border);
+  border-top-color:var(--accent);border-radius:50%;
+  animation:spin .8s linear infinite;margin:0 auto 16px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-txt{font-size:14px;color:var(--text2)}
 
-.reader-footer {padding:10px 16px; border-top:1px solid var(--border); background:var(--surface); display:flex; align-items:center; gap:12px; flex-shrink:0}
-.prog-track {flex:1; height:4px; background:var(--border); border-radius:2px; cursor:pointer; position:relative}
-.prog-thumb {height:100%; border-radius:2px; background:var(--accent); transition:width .2s; pointer-events:none}
-.prog-info {font-size:12px; color:var(--text3); white-space:nowrap; min-width:40px; text-align:right}
-.nav-arrows {display:flex; gap:4px}
-.arr-btn {padding:5px 10px; border-radius:7px; font-size:13px; background:var(--surface2); border:1px solid var(--border); color:var(--text2); transition:all var(--transition)}
-.arr-btn:hover {border-color:var(--accent); color:var(--accent)}
+/* ── Toast ── */
+.toast{
+  position:fixed;bottom:20px;right:20px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:11px 16px;
+  font-size:13px;display:flex;align-items:center;gap:8px;
+  box-shadow:0 4px 20px rgba(0,0,0,.12);
+  opacity:0;transform:translateY(6px);
+  transition:all .25s;pointer-events:none;z-index:999;
+  max-width:300px;
+}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.toast-dot.success{background:#4caf50}
+.toast-dot.info{background:#2196f3}
+.toast-dot.warn{background:#ff9800}
 
-.loading-overlay {position:absolute; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:500; backdrop-filter:blur(2px)}
-.loading-overlay.show {display:flex}
-.loading-box {background:var(--surface); border-radius:14px; padding:32px 40px; text-align:center; border:1px solid var(--border)}
-.spinner {width:36px; height:36px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 16px}
-@keyframes spin {to {transform:rotate(360deg)}}
-.loading-txt {font-size:14px; color:var(--text2)}
-
-.toast {position:fixed; bottom:20px; right:20px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:11px 16px; font-size:13px; display:flex; align-items:center; gap:8px; box-shadow:0 4px 20px rgba(0,0,0,.12); opacity:0; transform:translateY(6px); transition:all .25s; pointer-events:none; z-index:999; max-width:300px}
-.toast.show {opacity:1; transform:translateY(0)}
-.toast-dot {width:8px; height:8px; border-radius:50%; flex-shrink:0}
-.toast-dot.success {background:#4caf50}
-.toast-dot.info {background:#2196f3}
-.toast-dot.warn {background:#ff9800}
-
-.mob-overlay {display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:90}
-@media(max-width:640px) {
-  :root {--sidebar:280px}
-  .sidebar {position:fixed; left:0; top:0; bottom:0; transform:translateX(-100%)}
-  .sidebar.open {transform:translateX(0)}
-  .mob-overlay.show {display:block}
-  .menu-btn {display:flex}
-  .grid {grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:10px}
-  .library-view {padding:14px}
-  .txt-area {padding:20px 14px}
+/* ── Overlay & Mobile ── */
+.mob-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.45);z-index:90;
+}
+@media(max-width:640px){
+  :root{--sidebar:280px}
+  .sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .mob-overlay.show{display:block}
+  .menu-btn{display:flex}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px}
+  .library-view{padding:14px}
+  .txt-area{padding:20px 14px}
+  .reader-toolbar{gap:5px}
+  .rt-sep{margin:0 2px}
+  .toast{bottom:12px;right:12px;left:12px;max-width:none}
 }
 
-#fileInput {display:none}
+/* ── File input hidden ── */
+#fileInput{display:none}
 
-.chapters-panel {position:absolute; top:0; right:0; bottom:0; width:260px; background:var(--surface); border-left:1px solid var(--border); transform:translateX(100%); transition:transform var(--transition); z-index:50; display:flex; flex-direction:column; box-shadow:-4px 0 20px rgba(0,0,0,.08)}
-.chapters-panel.open {transform:translateX(0)}
-.cp-head {padding:14px 14px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0}
-.cp-title {font-size:14px; font-weight:500}
-.cp-close {padding:5px; border-radius:6px; color:var(--text2); cursor:pointer}
-.cp-close:hover {background:var(--surface2)}
-.cp-list {flex:1; overflow-y:auto; padding:8px}
-.cp-item {padding:9px 12px; border-radius:7px; cursor:pointer; font-size:13px; color:var(--text2); transition:all var(--transition); display:flex; align-items:flex-start; gap:8px}
-.cp-item:hover {background:var(--surface2); color:var(--text)}
-.cp-item.active {background:var(--surface2); color:var(--text); font-weight:500}
+/* ── Chapters Panel ── */
+.chapters-panel{
+  position:absolute;top:0;right:0;bottom:0;
+  width:260px;background:var(--surface);
+  border-left:1px solid var(--border);
+  transform:translateX(100%);transition:transform var(--transition);
+  z-index:50;display:flex;flex-direction:column;
+  box-shadow:-4px 0 20px rgba(0,0,0,.08);
+}
+.chapters-panel.open{transform:translateX(0)}
+.cp-head{
+  padding:14px 14px 12px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+.cp-title{font-size:14px;font-weight:500}
+.cp-close{padding:5px;border-radius:6px;color:var(--text2);cursor:pointer}
+.cp-close:hover{background:var(--surface2)}
+.cp-list{flex:1;overflow-y:auto;padding:8px}
+.cp-item{
+  padding:9px 12px;border-radius:7px;cursor:pointer;
+  font-size:13px;color:var(--text2);transition:all var(--transition);
+  display:flex;align-items:flex-start;gap:8px;
+}
+.cp-item:hover{background:var(--surface2);color:var(--text)}
+.cp-item.active{background:var(--surface2);color:var(--text);font-weight:500}
+.cp-num{font-size:11px;color:var(--text3);min-width:20px;padding-top:1px}
 
-.search-bar {display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); background:var(--surface); flex-shrink:0; display:none}
-.search-bar.show {display:flex}
-.search-bar input {flex:1; border:1px solid var(--border); border-radius:8px; padding:7px 12px; font-size:13px; background:var(--surface2); color:var(--text); font-family:var(--sans); outline:none; transition:border-color var(--transition)}
-.search-bar input:focus {border-color:var(--accent)}
+/* ── Search in book ── */
+.search-bar{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 14px;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;
+}
+.search-bar input{
+  flex:1;border:1px solid var(--border);border-radius:8px;
+  padding:7px 12px;font-size:13px;
+  background:var(--surface2);color:var(--text);
+  font-family:var(--sans);outline:none;transition:border-color var(--transition);
+}
+.search-bar input:focus{border-color:var(--accent)}
+.search-bar input::placeholder{color:var(--text3)}
 
-.modal-overlay {display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; align-items:center; justify-content:center}
-.modal-overlay.show {display:flex}
-.modal-box {background:var(--surface); border-radius:12px; padding:24px; border:1px solid var(--border); max-width:360px; text-align:center}
-.modal-title {font-size:16px; font-weight:600; margin-bottom:12px}
-.modal-text {font-size:13px; color:var(--text2); margin-bottom:20px; line-height:1.6}
-.modal-buttons {display:flex; gap:10px}
-.modal-btn {flex:1; padding:10px; border-radius:8px; border:1px solid var(--border); font-size:13px; transition:all var(--transition); cursor:pointer}
-.modal-btn.primary {background:var(--accent); color:#fff; border-color:var(--accent)}
-.modal-btn.primary:hover {opacity:0.9}
-.modal-btn:hover {background:var(--surface2)}
+/* ── Modal Dialog ── */
+.modal-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.5);z-index:1000;
+  align-items:center;justify-content:center;
+}
+.modal-overlay.show{display:flex}
+.modal-box{
+  background:var(--surface);border-radius:12px;
+  padding:24px;border:1px solid var(--border);
+  max-width:360px;text-align:center;
+}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:12px}
+.modal-text{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6}
+.modal-buttons{display:flex;gap:10px}
+.modal-btn{
+  flex:1;padding:10px;border-radius:8px;
+  border:1px solid var(--border);font-size:13px;
+  transition:all var(--transition);cursor:pointer;
+}
+.modal-btn.primary{
+  background:var(--accent);color:#fff;border-color:var(--accent);
+}
+.modal-btn.primary:hover{opacity:0.9}
+.modal-btn:hover{background:var(--surface2)}
 </style>
 </head>
 <body>
@@ -192,631 +469,721 @@ button {cursor:pointer; background:none; border:none; color:inherit; font-family
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-head">
       <div class="logo"><span>F</span>olio</div>
-      <button class="drive-btn" id="driveBtn" onclick="handleDriveAuth()">
-        <svg width="18" height="18" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 27h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>
-        <span id="driveBtnTxt">连接 Google Drive</span>
-      </button>
+      <div class="drive-area">
+        <button class="drive-btn" id="driveBtn" onclick="handleDriveAuth()">
+          <svg width="18" height="18" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+            <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+            <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+            <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+            <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+            <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+            <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 27h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+          </svg>
+          <span id="driveBtnTxt">连接 Google Drive</span>
+        </button>
+        <div class="drive-status" id="driveStatus"></div>
+      </div>
     </div>
 
     <div class="sidebar-nav">
       <div class="nav-item active" id="navAll" onclick="setNav('all')">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        所有书籍
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>
+        <span>所有格式</span>
       </div>
-      <div class="nav-item" id="navRecent" onclick="setNav('recent')">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
-        最近阅读
+      <div class="nav-item" id="navEpub" onclick="setNav('epub')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 3h16c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2z"/></svg>
+        <span>EPUB</span>
       </div>
-      <div class="nav-item" id="navFav" onclick="setNav('fav')">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-        收藏书签
+      <div class="nav-item" id="navPdf" onclick="setNav('pdf')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h5"/></svg>
+        <span>PDF</span>
+      </div>
+      <div class="nav-item" id="navTxt" onclick="setNav('txt')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M7 8h10M7 12h10M7 16h7"/></svg>
+        <span>文本</span>
       </div>
     </div>
 
-    <div class="book-list" id="sidebarList">
-      <div class="sl-label">书库</div>
-    </div>
+    <div class="book-list" id="bookList"></div>
   </aside>
 
   <div class="main">
     <div class="topbar">
-      <button class="menu-btn" onclick="openSidebar()" aria-label="菜单">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <button class="menu-btn" id="menuBtn" onclick="toggleSidebar()">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
-      <div class="topbar-title" id="topbarTitle">Folio 书库</div>
+      <div class="topbar-title" id="topbarTitle">Folio 阅读器</div>
       <div class="topbar-actions">
-        <button class="tb-btn" id="btnSearch" onclick="toggleSearch()" title="搜索" style="display:none">
-          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <button class="tb-btn" id="dualPageBtn" onclick="toggleDualPage()" title="双页阅读">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="18"/><rect x="13" y="3" width="8" height="18"/></svg>
         </button>
-        <button class="tb-btn" id="btnChapters" onclick="toggleChapters()" title="目录" style="display:none">
-          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <button class="tb-btn" id="chaptersBtn" onclick="toggleChapters()" title="目录">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="3" cy="18" r="1"/></svg>
         </button>
-        <button class="tb-btn" id="btnBookmark" onclick="toggleBookmark()" title="书签" style="display:none">
-          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-        </button>
-        <button class="tb-btn" onclick="document.getElementById('fileInput').click()" title="添加书籍">
-          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        </button>
-        <button class="tb-btn" id="btnLibrary" onclick="showLibrary()" title="书库" style="display:none">
-          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        <button class="tb-btn" id="closeBtn" onclick="closeReader()">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
     </div>
 
-    <div class="search-bar" id="searchBar">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" id="searchInput" placeholder="在书中搜索…" oninput="doSearch()" onkeydown="if(event.key==='Escape')toggleSearch()">
-      <button onclick="toggleSearch()" style="color:var(--text3); cursor:pointer; background:none; border:none">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
-
-    <div class="view library-view" id="libraryView">
-      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
-        <div class="drop-icon">
-          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    <div class="view">
+      <div class="library-view" id="libraryView">
+        <div class="drop-zone" id="dropZone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+          <div class="drop-icon">📁</div>
+          <div class="drop-title">拖拽放置或点击选择</div>
+          <div class="drop-sub">支持 EPUB、PDF、TXT、MOBI 等多种格式</div>
+          <div class="drop-formats">
+            <span class="fmt-badge">EPUB</span>
+            <span class="fmt-badge">PDF</span>
+            <span class="fmt-badge">TXT</span>
+            <span class="fmt-badge">MOBI</span>
+          </div>
         </div>
-        <div class="drop-title">上传书籍</div>
-        <div class="drop-sub">拖放文件到此处，或点击选择文件<br>连接 Google Drive 后可同步到云端</div>
-        <div class="drop-formats">
-          <span class="fmt-badge">TXT</span>
-          <span class="fmt-badge">EPUB</span>
-          <span class="fmt-badge">PDF</span>
-        </div>
-      </div>
-      <div id="libraryContent"></div>
-    </div>
-
-    <div class="view reader-view" id="readerView">
-      <div class="reader-toolbar">
-        <div class="rt-group">
-          <button class="tb-btn" onclick="fontSize(-1)" title="减小字号">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          </button>
-          <span class="rt-lbl" id="fsLbl">17</span>
-          <button class="tb-btn" onclick="fontSize(1)" title="增大字号">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          </button>
-        </div>
-        <div class="rt-sep"></div>
-        <div class="rt-group">
-          <button class="tb-btn" onclick="lineH(-1)" title="减小行距">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="14" x2="21" y2="14"/></svg>
-          </button>
-          <span class="rt-lbl" id="lhLbl">1.9</span>
-          <button class="tb-btn" onclick="lineH(1)" title="增大行距">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="4" x2="21" y2="4"/><line x1="3" y1="20" x2="21" y2="20"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
-          </button>
-        </div>
-        <div class="rt-sep"></div>
-        <div class="rt-group" style="gap:6px">
-          <button class="theme-btn t-light" onclick="setTheme('')" title="白天"></button>
-          <button class="theme-btn t-sepia" onclick="setTheme('sepia')" title="护眼"></button>
-          <button class="theme-btn t-dark" onclick="setTheme('dark')" title="夜间"></button>
-        </div>
-        <div style="margin-left:auto;font-size:12px;color:var(--text3)" id="readerBookTitle"></div>
+        <div id="booksContainer"></div>
       </div>
 
-      <iframe id="epubFrame" title="EPUB阅读区"></iframe>
-      <div class="txt-area" id="txtArea" onscroll="updateProg()">
-        <div class="txt-content" id="txtContent"></div>
-      </div>
-      <div class="pdf-area" id="pdfArea"></div>
+      <div class="reader-view" id="readerView">
+        <div class="reader-toolbar">
+          <div class="rt-group">
+            <span class="rt-lbl">主题</span>
+            <button class="theme-btn t-light" onclick="setTheme('light')" title="浅色"></button>
+            <button class="theme-btn t-dark" onclick="setTheme('dark')" title="深色"></button>
+            <button class="theme-btn t-sepia" onclick="setTheme('sepia')" title="复古"></button>
+          </div>
+          <div class="rt-sep"></div>
+          <div class="rt-group">
+            <span class="rt-lbl">字号</span>
+            <button class="tb-btn" id="fontSmallBtn" onclick="changeFontSize(-2)">A</button>
+            <button class="tb-btn" id="fontLargeBtn" onclick="changeFontSize(2)">A+</button>
+          </div>
+        </div>
 
-      <div class="chapters-panel" id="chaptersPanel">
-        <div class="cp-head">
-          <span class="cp-title">目录</span>
-          <button class="cp-close" onclick="toggleChapters()">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-        <div class="cp-list" id="cpList"></div>
-      </div>
+        <iframe id="epubFrame" style="display:none;"></iframe>
+        <div class="txt-area" id="txtArea" style="display:none;"><div class="txt-content" id="txtContent"></div></div>
+        <div class="pdf-area" id="pdfArea" style="display:none;"></div>
 
-      <div class="reader-footer">
-        <div class="nav-arrows" id="pdfNav" style="display:none">
-          <button class="arr-btn" onclick="pdfPrev()">‹</button>
-          <span id="pdfPageInfo" style="font-size:12px;color:var(--text3);padding:0 6px;align-self:center"></span>
-          <button class="arr-btn" onclick="pdfNext()">›</button>
+        <div class="reader-footer">
+          <div style="flex:1;display:flex;align-items:center;gap:8px;min-width:0;">
+            <div class="prog-track" onclick="seekProgress(event)">
+              <div class="prog-thumb" id="progThumb"></div>
+            </div>
+            <div class="prog-info" id="progInfo">0%</div>
+          </div>
+          <div class="nav-arrows">
+            <button class="arr-btn" id="prevBtn" onclick="prevPage()">← 上一页</button>
+            <button class="arr-btn" id="nextBtn" onclick="nextPage()">下一页 →</button>
+          </div>
         </div>
-        <div class="prog-track" id="progTrack" onclick="seekProg(event)">
-          <div class="prog-thumb" id="progThumb" style="width:0%"></div>
-        </div>
-        <div class="prog-info" id="progInfo">0%</div>
       </div>
     </div>
+  </div>
 
-    <div class="loading-overlay" id="loadingOverlay">
-      <div class="loading-box">
-        <div class="spinner"></div>
-        <div class="loading-txt" id="loadingTxt">正在加载书籍…</div>
-      </div>
+  <div class="chapters-panel" id="chaptersPanel">
+    <div class="cp-head">
+      <div class="cp-title">目录</div>
+      <button class="cp-close" onclick="toggleChapters()">✕</button>
     </div>
+    <div class="cp-list" id="chaptersList"></div>
+  </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div class="loading-txt" id="loadingTxt">正在加载...</div>
   </div>
 </div>
 
 <div class="toast" id="toast">
-  <div class="toast-dot" id="toastDot"></div>
-  <span id="toastMsg"></span>
+  <div class="toast-dot success"></div>
+  <span id="toastTxt"></span>
 </div>
 
-<div class="modal-overlay" id="deleteModal">
-  <div class="modal-box">
-    <div class="modal-title">确认删除</div>
-    <div class="modal-text" id="deleteModalText">确定要删除这本书吗？</div>
-    <div class="modal-buttons">
-      <button class="modal-btn" onclick="closeDeleteModal()">取消</button>
-      <button class="modal-btn primary" onclick="confirmDelete()">删除</button>
-    </div>
-  </div>
-</div>
-
-<input type="file" id="fileInput" accept=".txt,.epub,.pdf" multiple onchange="handleFiles(this.files)">
+<input type="file" id="fileInput" multiple accept=".epub,.pdf,.txt,.mobi" onchange="handleFileSelect(event)">
 
 <script>
-const DB_KEY='folio_v4';
-let store = loadStore();
+// ==================== 全局变量 ====================
 let currentBook = null;
-let curNav = 'all';
-let chaptersOpen = false;
-let searchOpen = false;
-let bookmarkSet = new Set(store.bookmarks||[]);
-let epubBook = null, epubRendition = null;
-let pdfDoc = null, pdfPage = 1, pdfTotal = 0;
-let txtChunks = [], txtChunk = 0, pdfSearchResults = [];
-let fsVal = store.fs||17, lhVal = store.lh||1.9;
-let pendingDeleteId = null;
+let currentFileType = null;
+let currentTheme = 'light';
+let currentFontSize = 17;
+let dualPageMode = false;
+let currentPage = 0;
+let totalPages = 0;
+let books = [];
+let currentNav = 'all';
+let pdfDoc = null;
+let pdfCurrentPage = 1;
 
-function loadStore(){ try{ return JSON.parse(localStorage.getItem(DB_KEY)||'{}') }catch(e){ return {} } }
-function saveStore(){
-  store.fs=fsVal; store.lh=lhVal; store.bookmarks=[...bookmarkSet];
-  try{ localStorage.setItem(DB_KEY, JSON.stringify(store)) }catch(e){}
-}
+const state = {
+  books: JSON.parse(localStorage.getItem('folio_books') || '[]'),
+  theme: localStorage.getItem('folio_theme') || 'light',
+  fontSize: parseInt(localStorage.getItem('folio_fontSize')) || 17,
+};
 
-let idbDB=null;
-function openIDB(){
-  return new Promise((res,rej)=>{
-    const req=indexedDB.open('folioBooks',1);
-    req.onupgradeneeded=e=>{ e.target.result.createObjectStore('files') };
-    req.onsuccess=e=>{ idbDB=e.target.result; res() };
-    req.onerror=()=>rej(new Error('打开数据库失败'));
-  });
-}
-function idbPut(key,val){
-  return new Promise((res,rej)=>{
-    const tx=idbDB.transaction('files','readwrite');
-    const s=tx.objectStore('files');
-    if(val===null) s.delete(key); else s.put(val,key);
-    tx.oncomplete=res; tx.onerror=rej;
-  });
-}
-function idbGet(key){
-  return new Promise((res,rej)=>{
-    const tx=idbDB.transaction('files','readonly');
-    const req=tx.objectStore('files').get(key);
-    req.onsuccess=()=>res(req.result); req.onerror=rej;
-  });
-}
-
-function getBooks(){ return store.books||[] }
-function saveBook(meta){
-  if(!store.books) store.books=[];
-  const idx=store.books.findIndex(b=>b.id===meta.id);
-  if(idx>=0) store.books[idx]=meta; else store.books.push(meta);
-  saveStore();
-}
-async function deleteBook(id){
-  store.books=(store.books||[]).filter(b=>b.id!==id);
-  if(bookmarkSet.has(id)) bookmarkSet.delete(id);
-  saveStore();
-  await idbPut(id,null);
-  renderLibrary(); renderSidebar();
-  toast('书籍已删除','success');
-}
-
-const EMOJIS=['📗','📘','📙','📕','📓','📔','📒','🗒️'];
-function randEmoji(){ return EMOJIS[Math.floor(Math.random()*EMOJIS.length)] }
-const COLORS=['#FFF3E0','#E3F2FD','#F3E5F5','#E8F5E9','#FBE9E7','#E0F7FA','#FFF8E1','#F9FBE7'];
-function randColor(){ return COLORS[Math.floor(Math.random()*COLORS.length)] }
-
-function showDeleteModal(id,title){
-  pendingDeleteId=id;
-  document.getElementById('deleteModalText').textContent=`确定要删除《${title}》吗？`;
-  document.getElementById('deleteModal').classList.add('show');
-}
-function closeDeleteModal(){ pendingDeleteId=null; document.getElementById('deleteModal').classList.remove('show'); }
-async function confirmDelete(){ if(pendingDeleteId){ await deleteBook(pendingDeleteId); closeDeleteModal(); } }
-
-function renderLibrary(){
-  let books=getBooks();
-  if(curNav==='recent') books=books.filter(b=>b.lastRead).sort((a,b)=>(b.lastRead||0)-(a.lastRead||0)).slice(0,12);
-  if(curNav==='fav') books=books.filter(b=>bookmarkSet.has(b.id));
+// ==================== 初始化 ====================
+document.addEventListener('DOMContentLoaded', () => {
+  currentTheme = state.theme;
+  currentFontSize = state.fontSize;
+  setTheme(currentTheme);
+  loadBooksFromStorage();
+  setupDropZone();
+  document.getElementById('dropZone').onclick = () => document.getElementById('fileInput').click();
   
-  const el=document.getElementById('libraryContent');
-  if(!books.length){
-    el.innerHTML=`<div class="empty-state"><svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><p>${curNav==='all'?'还没有书籍，点击上方上传':curNav==='recent'?'还没有最近阅读记录':'还没有收藏书签'}</p></div>`;
+  console.log('✅ Folio 阅读器已初始化');
+});
+
+// ==================== 主题系统 ====================
+function setTheme(theme) {
+  currentTheme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('folio_theme', theme);
+  document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelector(`.theme-btn.t-${theme}`).classList.add('active');
+}
+
+function changeFontSize(delta) {
+  currentFontSize = Math.max(12, Math.min(32, currentFontSize + delta));
+  localStorage.setItem('folio_fontSize', currentFontSize);
+  document.documentElement.style.setProperty('--fs', currentFontSize + 'px');
+}
+
+// ==================== 文件处理 ====================
+function handleDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  document.getElementById('dropZone').classList.remove('drag-over');
+  
+  const files = e.dataTransfer.files;
+  processFiles(files);
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  document.getElementById('dropZone').classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('drag-over');
+}
+
+function handleFileSelect(e) {
+  const files = e.target.files;
+  processFiles(files);
+  e.target.value = '';
+}
+
+async function processFiles(files) {
+  for (let file of files) {
+    try {
+      showLoading(true, `正在处理 ${file.name}...`);
+      await addBook(file);
+    } catch (err) {
+      console.error('❌ 处理文件失败:', err);
+      showToast(`❌ 处理失败: ${file.name}`, 'warn');
+    }
+  }
+  showLoading(false);
+  loadBooksFromStorage();
+}
+
+async function addBook(file) {
+  const reader = new FileReader();
+  
+  return new Promise((resolve, reject) => {
+    reader.onload = async (e) => {
+      try {
+        const arrayBuffer = e.target.result;
+        const ext = file.name.split('.').pop().toLowerCase();
+        
+        let book = {
+          id: Date.now() + Math.random(),
+          name: file.name.replace(/\.[^.]+$/, ''),
+          type: getFileType(ext),
+          size: file.size,
+          addedTime: new Date().toLocaleDateString('zh-CN'),
+          progress: 0,
+          data: arrayBuffer
+        };
+        
+        state.books.push(book);
+        localStorage.setItem('folio_books', JSON.stringify(state.books));
+        showToast(`✅ 已添加: ${book.name}`, 'success');
+        resolve();
+      } catch (err) {
+        reject(err);
+      }
+    };
+    
+    reader.onerror = () => reject(new Error('文件读取失败'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function getFileType(ext) {
+  const map = {
+    'epub': 'epub',
+    'pdf': 'pdf',
+    'txt': 'txt',
+    'mobi': 'mobi'
+  };
+  return map[ext] || 'unknown';
+}
+
+// ==================== 书籍管理 ====================
+function loadBooksFromStorage() {
+  state.books = JSON.parse(localStorage.getItem('folio_books') || '[]');
+  renderBooks();
+}
+
+function renderBooks() {
+  const container = document.getElementById('booksContainer');
+  container.innerHTML = '';
+  
+  const filtered = state.books.filter(b => currentNav === 'all' || b.type === currentNav);
+  
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>还没有书籍，请添加一些</p></div>';
     return;
   }
   
-  el.innerHTML=`<div class="section-hd"><div class="section-title">${{all:'我的书籍',recent:'最近阅读',fav:'收藏书签'}[curNav]}</div><div class="section-count">${books.length} 本</div></div><div class="grid">${books.map(b=>`<div class="book-tile" onclick="openBook('${b.id}')"><div class="tile-del-btn" onclick="event.stopPropagation();showDeleteModal('${b.id}','${b.title.replace(/'/g,"\\'")}')">×</div><div class="tile-cover" style="background:${b.color||'#f0ece4'}"><span>${b.emoji||'📖'}</span>${b.prog>=99?'<span class="tile-badge">已读完</span>':''}</div><div class="tile-body"><div class="tile-title">${b.title}</div><div class="tile-author">${b.author||'未知作者'}</div><div class="tile-bar"><div class="tile-fill" style="width:${b.prog||0}%"></div></div></div></div>`).join('')}</div>`;
-}
-
-function renderSidebar(){
-  const books=getBooks().slice(-20).reverse();
-  const el=document.getElementById('sidebarList');
-  el.innerHTML=`<div class="sl-label">书库</div>${books.map(b=>`<div class="sl-item${currentBook&&currentBook.id===b.id?' active':''}" onclick="openBook('${b.id}')"><div class="sl-cover" style="background:${b.color||'#f0ece4'}">${b.emoji||'📖'}</div><div class="sl-info"><div class="sl-title">${b.title}</div><div class="sl-author">${b.type.toUpperCase()}</div><div class="sl-prog"><div class="sl-prog-fill" style="width:${b.prog||0}%"></div></div></div><div class="sl-item-del" onclick="event.stopPropagation();showDeleteModal('${b.id}','${b.title.replace(/'/g,"\\'")}')">×</div></div>`).join('')}`;
-}
-
-function detectCharset(buffer){
-  const view=new Uint8Array(buffer);
-  if(view[0]===0xEF&&view[1]===0xBB&&view[2]===0xBF) return 'UTF-8';
-  if(view[0]===0xFF&&view[1]===0xFE) return 'UTF-16LE';
-  if(view[0]===0xFE&&view[1]===0xFF) return 'UTF-16BE';
-  try{
-    new TextDecoder('UTF-8',{fatal:true}).decode(new Uint8Array(buffer.slice(0,Math.min(buffer.byteLength,1000))));
-    return 'UTF-8';
-  }catch(e){}
-  return 'GBK';
-}
-
-async function handleFiles(files){
-  for(const file of files){
-    const ext=file.name.split('.').pop().toLowerCase();
-    if(!['txt','epub','pdf'].includes(ext)){ toast('格式不支持','warn'); continue; }
-    showLoading(`正在导入「${file.name}」…`);
-    try{
-      const id='book_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
-      const ab=await file.arrayBuffer();
-      await idbPut(id,ab);
-      
-      let title=file.name.replace(/\.[^.]+$/,'');
-      let author='';
-      
-      if(ext==='epub'){
-        try{
-          const zip=await JSZip.loadAsync(ab);
-          const rootfile=await zip.file('META-INF/container.xml').async('text');
-          const parser=new DOMParser();
-          const doc=parser.parseFromString(rootfile,'application/xml');
-          const opfPath=doc.querySelector('rootfile').getAttribute('full-path');
-          const opf=await zip.file(opfPath).async('text');
-          const opfdoc=parser.parseFromString(opf,'application/xml');
-          const t=opfdoc.querySelector('title');
-          const a=opfdoc.querySelector('creator');
-          if(t) title=t.textContent;
-          if(a) author=a.textContent;
-        }catch(e){ console.error('EPUB元数据提取失败:',e); }
-      }
-      
-      const meta={
-        id,type:ext,title,author,
-        emoji:randEmoji(),color:randColor(),
-        prog:0,addedAt:Date.now(),lastRead:0,
-        currentPos:0,totalChapters:1,currentChapter:0
-      };
-      saveBook(meta);
-      hideLoading();
-      toast(`已添加 《${title}》`,'success');
-      renderLibrary();
-      renderSidebar();
-    }catch(e){
-      hideLoading();
-      console.error('文件导入失败:',e);
-      toast('导入失败:'+e.message,'warn');
+  const sections = {
+    'epub': { title: 'EPUB 书籍', books: [] },
+    'pdf': { title: 'PDF 文档', books: [] },
+    'txt': { title: '文本文件', books: [] },
+    'mobi': { title: 'MOBI 书籍', books: [] }
+  };
+  
+  filtered.forEach(book => {
+    if (sections[book.type]) {
+      sections[book.type].books.push(book);
     }
-  }
-  document.getElementById('fileInput').value='';
+  });
+  
+  Object.keys(sections).forEach(type => {
+    if (sections[type].books.length > 0) {
+      container.innerHTML += `
+        <div class="section-hd">
+          <span class="section-title">${sections[type].title}</span>
+          <span class="section-count">${sections[type].books.length}</span>
+        </div>
+        <div class="grid">
+          ${sections[type].books.map(book => `
+            <div class="book-tile" onclick="openBook(${book.id})">
+              <div class="tile-cover">${getIcon(book.type)}</div>
+              <div class="tile-delete-btn" onclick="deleteBook(event, ${book.id})">×</div>
+              <div class="tile-body">
+                <div class="tile-title">${book.name}</div>
+                <div class="tile-author">${book.addedTime}</div>
+                <div class="tile-bar">
+                  <div class="tile-fill" style="width:${book.progress || 0}%"></div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+  });
 }
 
-async function openBook(id){
-  try{
-    const book=getBooks().find(b=>b.id===id);
-    if(!book){ toast('书籍不存在','warn'); return; }
-    
-    currentBook=book;
-    book.lastRead=Date.now();
-    saveBook(book);
-    
-    showLoading(`正在打开 《${book.title}》…`);
-    
-    const ab=await idbGet(id);
-    if(!ab){ hideLoading(); toast('书籍文件丢失','warn'); return; }
-    
-    document.getElementById('libraryView').style.display='none';
+function getIcon(type) {
+  const icons = { 'epub': '📚', 'pdf': '📄', 'txt': '📝', 'mobi': '📖' };
+  return icons[type] || '📕';
+}
+
+function deleteBook(e, id) {
+  e.stopPropagation();
+  if (confirm('确定要删除这本书吗？')) {
+    state.books = state.books.filter(b => b.id !== id);
+    localStorage.setItem('folio_books', JSON.stringify(state.books));
+    loadBooksFromStorage();
+    showToast('✅ 已删除', 'success');
+  }
+}
+
+function setNav(type) {
+  currentNav = type;
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById(`nav${type.charAt(0).toUpperCase() + type.slice(1)}`).classList.add('active');
+  renderBooks();
+}
+
+// ==================== 阅读器 ====================
+async function openBook(id) {
+  const book = state.books.find(b => b.id === id);
+  if (!book) return;
+  
+  showLoading(true, `正在打开 ${book.name}...`);
+  
+  try {
+    currentBook = book;
+    currentFileType = book.type;
+    document.getElementById('topbarTitle').textContent = book.name;
+    document.getElementById('libraryView').style.display = 'none';
     document.getElementById('readerView').classList.add('active');
-    document.getElementById('topbarTitle').textContent=book.title;
-    document.getElementById('readerBookTitle').textContent=book.title;
-    document.getElementById('btnLibrary').style.display='flex';
-    document.getElementById('btnChapters').style.display='flex';
-    document.getElementById('btnBookmark').style.display='flex';
-    document.getElementById('btnSearch').style.display='flex';
     
-    updateBookmarkIcon();
-    renderSidebar();
-    
-    if(book.type==='epub'){
-      await loadEpub(ab,book);
-    }else if(book.type==='pdf'){
-      await loadPdf(ab,book);
-    }else if(book.type==='txt'){
-      await loadTxt(ab,book);
+    switch (book.type) {
+      case 'epub':
+        await openEpub(book);
+        break;
+      case 'pdf':
+        await openPdf(book);
+        break;
+      case 'txt':
+      case 'mobi':
+        await openText(book);
+        break;
     }
     
-    hideLoading();
-  }catch(e){
-    hideLoading();
-    console.error('打开书籍失败:',e);
-    toast('打开失败:'+e.message,'warn');
+    showToast(`✅ 已打开: ${book.name}`, 'success');
+  } catch (err) {
+    console.error('❌ 打开书籍失败:', err);
+    showToast(`❌ 打开失败: ${err.message}`, 'warn');
+    closeReader();
   }
+  
+  showLoading(false);
 }
 
-async function loadEpub(ab,book){
-  try{
-    document.getElementById('epubFrame').style.display='block';
-    document.getElementById('txtArea').style.display='none';
-    document.getElementById('pdfArea').style.display='none';
-    document.getElementById('pdfNav').style.display='none';
-    document.getElementById('progTrack').style.display='block';
+// ---- EPUB 阅读器 ----
+async function openEpub(book) {
+  const container = document.getElementById('pdfArea');
+  container.innerHTML = '';
+  container.style.display = 'none';
+  
+  const txtArea = document.getElementById('txtArea');
+  txtArea.style.display = 'none';
+  
+  const epubFrame = document.getElementById('epubFrame');
+  epubFrame.style.display = 'flex';
+  
+  try {
+    const book_obj = ePub(book.data);
+    await book_obj.ready;
     
-    const blob=new Blob([ab],{type:'application/epub+zip'});
-    const url=URL.createObjectURL(blob);
-    
-    if(epubBook) epubBook.destroy();
-    epubBook=ePub(url);
-    epubRendition=epubBook.renderTo('epubFrame',{width:'100%',height:'100%'});
-    
-    await epubRendition.display(book.currentPos||0);
-    epubRendition.on('relocated',(location)=>{
-      const prog=Math.round((location.start.percentage||0)*100);
-      book.prog=prog;
-      book.currentPos=location.start.cfi;
-      saveBook(book);
-      updateProgress();
+    const rendition = book_obj.renderTo(epubFrame, {
+      width: '100%',
+      height: '100%',
+      flow: 'paginated'
     });
     
-    renderChapters(epubBook.spine.spineItems);
-  }catch(e){ console.error('EPUB加载失败:',e); toast('EPUB加载失败','warn'); }
-}
-
-async function loadPdf(ab,book){
-  try{
-    document.getElementById('epubFrame').style.display='none';
-    document.getElementById('txtArea').style.display='none';
-    document.getElementById('pdfArea').style.display='flex';
-    document.getElementById('pdfNav').style.display='flex';
+    await rendition.display();
     
-    pdfjsWorker.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    const pdf=await pdfjsWorker.getDocument({data:ab}).promise;
-    pdfDoc=pdf;
-    pdfTotal=pdf.numPages;
-    pdfPage=Math.max(1,Math.min(book.currentPos||1,pdfTotal));
+    rendition.on('relocated', (location) => {
+      updateProgress(book);
+    });
     
-    renderPdfPage();
-  }catch(e){ console.error('PDF加载失败:',e); toast('PDF加载失败','warn'); }
-}
-
-async function renderPdfPage(){
-  const page=await pdfDoc.getPage(pdfPage);
-  const canvas=document.getElementById('pdfCanvas')||document.createElement('canvas');
-  canvas.id='pdfCanvas';
-  
-  const scale=2;
-  const viewport=page.getViewport({scale});
-  canvas.width=viewport.width;
-  canvas.height=viewport.height;
-  
-  const ctx=canvas.getContext('2d');
-  await page.render({canvasContext:ctx,viewport});
-  
-  if(!document.getElementById('pdfCanvas')){
-    document.getElementById('pdfArea').innerHTML='';
-    document.getElementById('pdfArea').appendChild(canvas);
-  }
-  
-  document.getElementById('pdfPageInfo').textContent=`${pdfPage}/${pdfTotal}`;
-  const prog=Math.round((pdfPage/pdfTotal)*100);
-  currentBook.prog=prog;
-  currentBook.currentPos=pdfPage;
-  saveBook(currentBook);
-  updateProgress();
-}
-
-function pdfNext(){ if(pdfPage<pdfTotal){ pdfPage++; renderPdfPage(); } }
-function pdfPrev(){ if(pdfPage>1){ pdfPage--; renderPdfPage(); } }
-
-async function loadTxt(ab,book){
-  try{
-    document.getElementById('epubFrame').style.display='none';
-    document.getElementById('txtArea').style.display='block';
-    document.getElementById('pdfArea').style.display='none';
-    document.getElementById('pdfNav').style.display='none';
+    rendition.on('keyup', (e) => {
+      if (e.keyCode === 37) prevPage();
+      if (e.keyCode === 39) nextPage();
+    });
     
-    const charset=detectCharset(ab);
-    const decoder=new TextDecoder(charset);
-    let text=decoder.decode(ab);
+    window.currentRendition = rendition;
+    window.currentEpubBook = book_obj;
+  } catch (err) {
+    throw new Error(`EPUB加载失败: ${err.message}`);
+  }
+}
+
+// ---- PDF 阅读器 ----
+async function openPdf(book) {
+  const container = document.getElementById('pdfArea');
+  container.innerHTML = '';
+  container.style.display = 'flex';
+  
+  document.getElementById('epubFrame').style.display = 'none';
+  document.getElementById('txtArea').style.display = 'none';
+  
+  try {
+    pdfDoc = await pdfjsLib.getDocument({ data: book.data }).promise;
+    totalPages = pdfDoc.numPages;
+    pdfCurrentPage = 1;
     
-    text=text.replace(/\r\n/g,'\n').trim();
-    const paras=text.split('\n\n').filter(p=>p.trim());
-    txtChunks=paras;
-    txtChunk=Math.floor((book.currentPos||0)*paras.length);
+    window.pdfDoc = pdfDoc;
+    window.pdfContainer = container;
     
-    renderTxtChapter();
-  }catch(e){ console.error('TXT加载失败:',e); toast('TXT加载失败:'+e.message,'warn'); }
+    renderPdfPage(1);
+    updateProgress(book);
+  } catch (err) {
+    throw new Error(`PDF加载失败: ${err.message}`);
+  }
 }
 
-function renderTxtChapter(){
-  const start=Math.max(0,txtChunk-5);
-  const end=Math.min(txtChunks.length,txtChunk+50);
-  const html=txtChunks.slice(start,end).map(p=>`<p>${p.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('');
+async function renderPdfPage(num) {
+  if (!pdfDoc) return;
   
-  document.getElementById('txtContent').innerHTML=html;
-  document.getElementById('txtArea').scrollTop=0;
-  updateProgress();
-}
-
-function updateProgress(){
-  if(!currentBook) return;
-  let prog=currentBook.prog||0;
-  if(currentBook.type==='txt'){
-    prog=Math.round((txtChunk/Math.max(1,txtChunks.length))*100);
+  try {
+    const page = await pdfDoc.getPage(num);
+    const scale = 1.5;
+    const viewport = page.getViewport({ scale });
+    
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    
+    await page.render({
+      canvasContext: context,
+      viewport: viewport
+    }).promise;
+    
+    const container = window.pdfContainer;
+    if (dualPageMode && num < totalPages) {
+      canvas.style.flex = '1';
+      container.innerHTML = '';
+      container.appendChild(canvas);
+      
+      // 渲染下一页
+      const page2 = await pdfDoc.getPage(num + 1);
+      const viewport2 = page2.getViewport({ scale });
+      const canvas2 = document.createElement('canvas');
+      const context2 = canvas2.getContext('2d');
+      canvas2.width = viewport2.width;
+      canvas2.height = viewport2.height;
+      
+      await page2.render({
+        canvasContext: context2,
+        viewport: viewport2
+      }).promise;
+      
+      canvas2.style.flex = '1';
+      container.appendChild(canvas2);
+    } else {
+      container.innerHTML = '';
+      container.appendChild(canvas);
+    }
+  } catch (err) {
+    console.error('❌ PDF 页面渲染失败:', err);
   }
-  document.getElementById('progThumb').style.width=prog+'%';
-  document.getElementById('progInfo').textContent=prog+'%';
 }
 
-function updateProg(){
-  if(currentBook.type!=='txt') return;
-  const area=document.getElementById('txtArea');
-  const totalHeight=area.scrollHeight-area.clientHeight;
-  if(totalHeight<=0) return;
-  const prog=Math.round((area.scrollTop/totalHeight)*100);
-  txtChunk=Math.floor((prog/100)*txtChunks.length);
-  currentBook.prog=prog;
-  currentBook.currentPos=prog/100;
-  saveBook(currentBook);
-  updateProgress();
-}
-
-function seekProg(e){
-  const track=e.currentTarget;
-  const x=e.offsetX;
-  const pct=x/track.offsetWidth;
+// ---- 文本阅读器 ----
+async function openText(book) {
+  const container = document.getElementById('pdfArea');
+  container.innerHTML = '';
+  container.style.display = 'none';
   
-  if(currentBook.type==='txt'){
-    txtChunk=Math.floor(pct*txtChunks.length);
-    renderTxtChapter();
-  }else if(currentBook.type==='pdf'){
-    pdfPage=Math.max(1,Math.floor(pct*pdfTotal));
-    renderPdfPage();
-  }
-}
-
-function renderChapters(items){
-  const html=items.map((item,i)=>`<div class="cp-item" onclick="goToChapter(${i})" data-cfi="${item.href}"><span class="cp-num">${i+1}</span><span>${item.label||'第'+(i+1)+'章'}</span></div>`).join('');
-  document.getElementById('cpList').innerHTML=html;
-}
-
-function goToChapter(idx){
-  if(currentBook.type==='epub'&&epubRendition){
-    epubRendition.display(epubBook.spine.spineItems[idx].href);
-  }
-}
-
-function toggleChapters(){
-  const panel=document.getElementById('chaptersPanel');
-  chaptersOpen=!chaptersOpen;
-  if(chaptersOpen) panel.classList.add('open');
-  else panel.classList.remove('open');
-}
-
-function toggleBookmark(){
-  if(!currentBook) return;
-  if(bookmarkSet.has(currentBook.id)) bookmarkSet.delete(currentBook.id);
-  else bookmarkSet.add(currentBook.id);
-  saveStore();
-  updateBookmarkIcon();
-  toast(bookmarkSet.has(currentBook.id)?'已添加书签':'已移除书签','info');
-}
-
-function updateBookmarkIcon(){
-  const icon=document.getElementById('bmkIcon');
-  if(currentBook&&bookmarkSet.has(currentBook.id)){
-    icon.style.fill='var(--accent)';
-  }else{
-    icon.style.fill='none';
-  }
-}
-
-function toggleSearch(){
-  searchOpen=!searchOpen;
-  const bar=document.getElementById('searchBar');
-  if(searchOpen){ bar.classList.add('show'); document.getElementById('searchInput').focus(); }
-  else{ bar.classList.remove('show'); document.getElementById('searchInput').value=''; }
-}
-
-function doSearch(){
-  const q=document.getElementById('searchInput').value.toLowerCase();
-  if(!q) return;
+  document.getElementById('epubFrame').style.display = 'none';
+  const txtArea = document.getElementById('txtArea');
+  txtArea.style.display = 'flex';
   
-  if(currentBook.type==='txt'){
-    const start=Math.max(0,txtChunk-5);
-    const end=Math.min(txtChunks.length,txtChunk+100);
-    const found=txtChunks.slice(start,end).findIndex(p=>p.toLowerCase().includes(q));
-    if(found>=0) txtChunk=start+found;
+  try {
+    let text = await decodeFileText(book.data);
+    
+    if (dualPageMode) {
+      const mid = Math.floor(text.length / 2);
+      const half1 = text.substring(0, mid);
+      const half2 = text.substring(mid);
+      
+      txtArea.innerHTML = `
+        <div class="dual-page-left"><div class="txt-content">${escapeHtml(half1)}</div></div>
+        <div class="dual-page-right"><div class="txt-content">${escapeHtml(half2)}</div></div>
+      `;
+    } else {
+      document.getElementById('txtContent').textContent = text;
+    }
+    
+    totalPages = 1;
+    updateProgress(book);
+  } catch (err) {
+    throw new Error(`文本加载失败: ${err.message}`);
   }
 }
 
-function fontSize(delta){
-  fsVal=Math.max(12,Math.min(32,fsVal+delta*2));
-  document.getElementById('fsLbl').textContent=fsVal;
-  document.getElementById('txtArea').style.setProperty('--fs',fsVal+'px');
-  saveStore();
+function decodeFileText(arrayBuffer) {
+  return new Promise((resolve, reject) => {
+    try {
+      // 尝试 UTF-8
+      const uint8 = new Uint8Array(arrayBuffer);
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(uint8);
+      resolve(text);
+    } catch (e1) {
+      try {
+        // 尝试 GBK / GB2312
+        const uint8 = new Uint8Array(arrayBuffer);
+        let text = '';
+        for (let i = 0; i < uint8.length; i++) {
+          text += String.fromCharCode(uint8[i]);
+        }
+        // 简单的 Latin1 解码
+        resolve(decodeURIComponent(escape(text)));
+      } catch (e2) {
+        reject(new Error('文本编码无法识别'));
+      }
+    }
+  });
 }
 
-function lineH(delta){
-  lhVal=Math.max(1.2,Math.min(2.5,lhVal+delta*0.2));
-  document.getElementById('lhLbl').textContent=lhVal.toFixed(1);
-  document.getElementById('txtContent').style.lineHeight=lhVal;
-  saveStore();
+function escapeHtml(text) {
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, m => map[m]).replace(/\n/g, '<br>');
 }
 
-function setTheme(theme){
-  document.documentElement.setAttribute('data-theme',theme);
-  localStorage.setItem('theme',theme);
-  document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active'));
-  if(theme==='dark') document.querySelector('.t-dark').classList.add('active');
-  else if(theme==='sepia') document.querySelector('.t-sepia').classList.add('active');
-  else document.querySelector('.t-light').classList.add('active');
+// ==================== 导航控制 ====================
+function prevPage() {
+  if (currentFileType === 'pdf') {
+    pdfCurrentPage = Math.max(1, pdfCurrentPage - (dualPageMode ? 2 : 1));
+    renderPdfPage(pdfCurrentPage);
+  } else if (window.currentRendition) {
+    window.currentRendition.prev();
+  }
 }
 
-function showLibrary(){
-  document.getElementById('libraryView').style.display='block';
+function nextPage() {
+  if (currentFileType === 'pdf') {
+    pdfCurrentPage = Math.min(totalPages, pdfCurrentPage + (dualPageMode ? 2 : 1));
+    renderPdfPage(pdfCurrentPage);
+  } else if (window.currentRendition) {
+    window.currentRendition.next();
+  }
+}
+
+function toggleDualPage() {
+  dualPageMode = !dualPageMode;
+  document.getElementById('dualPageBtn').classList.toggle('active');
+  
+  if (currentFileType === 'pdf' && pdfDoc) {
+    renderPdfPage(pdfCurrentPage);
+  } else if (currentFileType === 'txt' || currentFileType === 'mobi') {
+    const txtArea = document.getElementById('txtArea');
+    const content = document.getElementById('txtContent').textContent;
+    
+    if (dualPageMode) {
+      const mid = Math.floor(content.length / 2);
+      const half1 = content.substring(0, mid);
+      const half2 = content.substring(mid);
+      
+      txtArea.classList.add('dual-page');
+      txtArea.innerHTML = `
+        <div class="dual-page-left"><div class="txt-content">${escapeHtml(half1)}</div></div>
+        <div class="dual-page-right"><div class="txt-content">${escapeHtml(half2)}</div></div>
+      `;
+    } else {
+      txtArea.classList.remove('dual-page');
+      txtArea.innerHTML = `<div class="txt-content">${escapeHtml(content)}</div>`;
+    }
+  }
+  
+  showToast(dualPageMode ? '✅ 已启用双页模式' : '✅ 已关闭双页模式');
+}
+
+function seekProgress(e) {
+  if (!currentBook) return;
+  
+  const track = e.currentTarget;
+  const rect = track.getBoundingClientRect();
+  const percent = (e.clientX - rect.left) / rect.width;
+  
+  if (currentFileType === 'pdf') {
+    pdfCurrentPage = Math.max(1, Math.min(totalPages, Math.floor(totalPages * percent)));
+    renderPdfPage(pdfCurrentPage);
+  } else if (window.currentRendition) {
+    const fraction = window.currentRendition.book.spine.length * percent;
+    window.currentRendition.display(fraction);
+  }
+}
+
+function updateProgress(book) {
+  if (!currentBook || !book || book.id !== currentBook.id) return;
+  
+  let progress = 0;
+  
+  if (currentFileType === 'pdf') {
+    progress = Math.round((pdfCurrentPage / totalPages) * 100);
+  } else if (window.currentRendition) {
+    const current = window.currentRendition.currentLocation();
+    progress = Math.round((current.progress || 0) * 100);
+  }
+  
+  book.progress = Math.max(book.progress || 0, progress);
+  localStorage.setItem('folio_books', JSON.stringify(state.books));
+  
+  document.getElementById('progThumb').style.width = progress + '%';
+  document.getElementById('progInfo').textContent = progress + '%';
+}
+
+function closeReader() {
   document.getElementById('readerView').classList.remove('active');
-  document.getElementById('topbarTitle').textContent='Folio 书库';
-  document.getElementById('btnLibrary').style.display='none';
-  document.getElementById('btnChapters').style.display='none';
-  document.getElementById('btnBookmark').style.display='none';
-  document.getElementById('btnSearch').style.display='none';
-  currentBook=null;
-  renderSidebar();
+  document.getElementById('libraryView').style.display = 'block';
+  document.getElementById('epubFrame').style.display = 'none';
+  document.getElementById('txtArea').style.display = 'none';
+  document.getElementById('pdfArea').style.display = 'none';
+  
+  if (window.currentRendition) {
+    window.currentRendition.destroy();
+  }
+  
+  currentBook = null;
+  pdfDoc = null;
+  dualPageMode = false;
+  document.getElementById('dualPageBtn').classList.remove('active');
 }
 
-function setNav(nav){
-  curNav=nav;
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  document.getElementById('nav'+nav.charAt(0).toUpperCase()+nav.slice(1)).classList.add('active');
-  renderLibrary();
+function toggleChapters() {
+  document.getElementById('chaptersPanel').classList.toggle('open');
 }
 
-function onDragOver(e){ e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
-function onDragLeave(e){ e.currentTarget.classList.remove('drag-over'); }
-function onDrop(e){ e.preventDefault(); e.currentTarget.classList.remove('drag-over'); handleFiles(e.dataTransfer.files); }
-
-function openSidebar(){ document.getElementById('sidebar').classList.add('open'); document.getElementById('mobOverlay').classList.add('show'); }
-function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('mobOverlay').classList.remove('show'); }
-
-function showLoading(msg){ document.getElementById('loadingTxt').textContent=msg||'加载中…'; document.getElementById('loadingOverlay').classList.add('show'); }
-function hideLoading(){ document.getElementById('loadingOverlay').classList.remove('show'); }
-
-function toast(msg,type='info'){
-  const t=document.getElementById('toast');
-  document.getElementById('toastMsg').textContent=msg;
-  document.getElementById('toastDot').className='toast-dot '+type;
-  t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),3000);
+// ==================== UI 工具 ====================
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('mobOverlay').classList.toggle('show');
 }
 
-function handleDriveAuth(){ toast('谷歌Drive同步功能开发中','info'); }
-
-async function init(){
-  await openIDB();
-  setTheme(localStorage.getItem('theme')||'');
-  document.querySelector('.theme-btn.t-light').classList.add('active');
-  renderLibrary();
-  renderSidebar();
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('mobOverlay').classList.remove('show');
 }
 
-document.addEventListener('DOMContentLoaded',init);
+function showLoading(show, text = '加载中...') {
+  const overlay = document.getElementById('loadingOverlay');
+  const txt = document.getElementById('loadingTxt');
+  
+  if (show) {
+    txt.textContent = text;
+    overlay.classList.add('show');
+  } else {
+    overlay.classList.remove('show');
+  }
+}
+
+function showToast(message, type = 'info') {
+  const toast = document.getElementById('toast');
+  const dot = toast.querySelector('.toast-dot');
+  const txt = document.getElementById('toastTxt');
+  
+  dot.className = 'toast-dot ' + type;
+  txt.textContent = message;
+  toast.classList.add('show');
+  
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 3000);
+}
+
+function handleDriveAuth() {
+  showToast('💡 Google Drive 集成功能即将上线', 'info');
+}
+
+// 键盘快捷键
+document.addEventListener('keydown', (e) => {
+  if (!document.getElementById('readerView').classList.contains('active')) return;
+  
+  if (e.key === 'ArrowLeft') prevPage();
+  if (e.key === 'ArrowRight') nextPage();
+  if (e.key === 'Escape') closeReader();
+  if (e.key === 'r' && e.ctrlKey) location.reload();
+});
+
+console.log('✅ 所有功能已加载完成');
 </script>
 </body>
 </html>
