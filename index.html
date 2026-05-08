@@ -1050,12 +1050,128 @@ async function openEpubQuick(ab, meta){
   document.getElementById('btnEpubMode').classList.add('active');
   document.getElementById('btnEpubMode').title='切换到完整 EPUB 模式';
   cleanupEpub();
+
   const cached = await getChapterCache(meta);
   if(cached&&cached.chapters&&cached.chapters.length){
     setLoadingProgress(82,'正在读取章节缓存');
     showTextChapters(cached.chapters, meta, 'EPUB');
     return;
   }
+
+  setLoadingProgress(25,'正在解压 EPUB');
+
+  // Try off-main-thread parsing via Web Worker to avoid UI freeze on large EPUBs
+  let chapters = null;
+  try {
+    chapters = await parseEpubInWorker(ab, (pct, txt) => setLoadingProgress(pct, txt));
+  } catch(workerErr) {
+    // Worker not available (file:// protocol, CSP) — fall back to main thread
+    console.warn('Worker fallback:', workerErr.message);
+    chapters = await parseEpubMainThread(ab, meta);
+  }
+
+  if(!chapters||!chapters.length) throw new Error('没有提取到可阅读文本');
+  await saveChapterCache(meta, chapters);
+  setLoadingProgress(96,'正在显示 EPUB');
+  showTextChapters(chapters, meta, 'EPUB');
+  toast('已使用 EPUB 快速阅读模式','success');
+}
+
+// Off-main-thread EPUB parsing — keeps UI responsive during large book extraction
+function parseEpubInWorker(ab, onProgress){
+  return new Promise((resolve, reject)=>{
+    // Build the worker as an inline Blob — no separate file needed
+    const workerCode = `
+importScripts('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+
+function resolvePath(base, href){
+  if(!href) return '';
+  if(/^https?:\\/\\//i.test(href)) return href;
+  const dir = base.lastIndexOf('/')>=0 ? base.slice(0,base.lastIndexOf('/')+1) : '';
+  const parts = (dir+href).split('/');
+  const out = [];
+  for(const p of parts){ if(!p||p==='.') continue; if(p==='..') out.pop(); else out.push(p); }
+  return out.join('/');
+}
+
+self.onmessage = async function(e){
+  const ab = e.data;
+  try {
+    self.postMessage({type:'progress', pct:28, txt:'正在解压 EPUB'});
+    const zip = await JSZip.loadAsync(ab);
+    self.postMessage({type:'progress', pct:38, txt:'正在读取目录'});
+
+    // Read container.xml → OPF path
+    const container = await zip.file('META-INF/container.xml').async('text');
+    const m = container.match(/full-path="([^"]+\\.opf)"/);
+    if(!m) throw new Error('找不到 EPUB 目录文件');
+    const opfPath = m[1];
+
+    const opfText = await zip.file(opfPath).async('text');
+    const doc = new DOMParser().parseFromString(opfText,'application/xml');
+    const manifest = {};
+    doc.querySelectorAll('manifest item').forEach(item=>{
+      manifest[item.getAttribute('id')] = resolvePath(opfPath, item.getAttribute('href')||'');
+    });
+    const spine = [...doc.querySelectorAll('spine itemref')]
+      .map(item=>manifest[item.getAttribute('idref')])
+      .filter(Boolean);
+    if(!spine.length) throw new Error('EPUB 没有可读取的正文');
+
+    self.postMessage({type:'progress', pct:50, txt:'正在提取正文'});
+    const chapters = [];
+    for(let i=0;i<spine.length;i++){
+      const path = spine[i].split('#')[0];
+      const file = zip.file(path) || zip.file(decodeURIComponent(path.replace(/^\\//,'')));
+      if(!file) continue;
+      const html = await file.async('text');
+      const hdoc = new DOMParser().parseFromString(html,'text/html');
+      hdoc.querySelectorAll('script,style,nav,svg').forEach(n=>n.remove());
+      const heading = hdoc.querySelector('h1,h2,h3,title');
+      const title = (heading ? heading.textContent : '').trim() || ('第 '+(i+1)+' 节');
+      const nodes = hdoc.body ? hdoc.body.querySelectorAll('h1,h2,h3,h4,p,li,blockquote') : [];
+      const paras = [];
+      let last = '';
+      nodes.forEach(node=>{
+        const text = node.textContent.replace(/\\s+/g,' ').trim();
+        if(text && text!==title && text!==last && text.length>1){ paras.push(text); last=text; }
+      });
+      if(!paras.length && hdoc.body){
+        const text = hdoc.body.textContent.replace(/\\s+/g,' ').trim();
+        if(text) paras.push(text);
+      }
+      if(paras.length) chapters.push({title, paras});
+      if((i+1)%5===0) self.postMessage({type:'progress', pct:50+Math.round((i+1)/spine.length*42), txt:'正在提取正文 ('+(i+1)+'/'+spine.length+')'});
+    }
+    self.postMessage({type:'done', chapters});
+  } catch(err) {
+    self.postMessage({type:'error', message: err.message||String(err)});
+  }
+};`;
+
+    let worker;
+    try {
+      const blob = new Blob([workerCode], {type:'application/javascript'});
+      const url = URL.createObjectURL(blob);
+      worker = new Worker(url);
+      URL.revokeObjectURL(url);
+    } catch(e) {
+      reject(new Error('Worker 不可用: '+e.message)); return;
+    }
+
+    worker.onmessage = e=>{
+      const msg = e.data;
+      if(msg.type==='progress'){ onProgress(msg.pct, msg.txt) }
+      else if(msg.type==='done'){ worker.terminate(); resolve(msg.chapters) }
+      else if(msg.type==='error'){ worker.terminate(); reject(new Error(msg.message)) }
+    };
+    worker.onerror = err=>{ worker.terminate(); reject(new Error(err.message||'Worker 错误')) };
+    worker.postMessage(ab, [ab]); // transfer ownership — zero copy
+  });
+}
+
+// Main-thread fallback for environments that block Workers (file://, strict CSP)
+async function parseEpubMainThread(ab, meta){
   setLoadingProgress(30,'正在解压 EPUB');
   const zip = await JSZip.loadAsync(ab);
   setLoadingProgress(45,'正在读取 EPUB 目录');
@@ -1065,13 +1181,13 @@ async function openEpubQuick(ab, meta){
   const doc = new DOMParser().parseFromString(opfText,'application/xml');
   const manifest = {};
   doc.querySelectorAll('manifest item').forEach(item=>{
-    manifest[item.getAttribute('id')] = resolvePath(opfPath,item.getAttribute('href')||'');
+    manifest[item.getAttribute('id')] = resolvePath(opfPath, item.getAttribute('href')||'');
   });
   const spine = [...doc.querySelectorAll('spine itemref')]
     .map(item=>manifest[item.getAttribute('idref')])
     .filter(Boolean);
   if(!spine.length) throw new Error('EPUB 没有可读取的正文');
-  
+
   setLoadingProgress(60,'正在提取 EPUB 正文');
   const chapters = [];
   for(let i=0;i<spine.length;i++){
@@ -1081,15 +1197,10 @@ async function openEpubQuick(ab, meta){
     const html = await file.async('text');
     const chapter = epubHtmlToChapter(html, i);
     if(chapter.paras.length) chapters.push(chapter);
-    setLoadingProgress(60 + (i+1)/spine.length*32, '正在提取 EPUB 正文');
-    await nextFrame();
+    setLoadingProgress(60 + Math.round((i+1)/spine.length*32), '正在提取 EPUB 正文');
+    if((i+1)%8===0) await nextFrame(); // yield to keep UI alive every 8 chapters
   }
-  if(!chapters.length) throw new Error('没有提取到可阅读文本');
-  
-  await saveChapterCache(meta, chapters);
-  setLoadingProgress(96,'正在显示 EPUB');
-  showTextChapters(chapters, meta, 'EPUB');
-  toast('已使用 EPUB 快速阅读模式','success');
+  return chapters;
 }
 
 async function openEpubFull(ab, meta){
@@ -1098,24 +1209,41 @@ async function openEpubFull(ab, meta){
   document.getElementById('btnEpubMode').classList.remove('active');
   document.getElementById('btnEpubMode').title = isQuickLimitedEpub(meta) ? '较大 EPUB 已使用完整模式，避免全书解压卡顿' : '切换到快速文本模式';
   setLoadingProgress(30,'正在打开完整 EPUB');
+
   const blob = new Blob([ab],{type:'application/epub+zip'});
   epubObjectUrl = URL.createObjectURL(blob);
   epubBook = ePub(epubObjectUrl);
+
   const frame = document.getElementById('epubFrame');
   frame.innerHTML='';
+  // Show frame immediately so user sees something while rendering
   frame.style.display='block';
   document.getElementById('txtArea').style.display='none';
-  
+
+  // scrolled-continuous: no per-page layout calc, significantly faster than paginated
   epubRendition = epubBook.renderTo(frame, {
     width:'100%', height:'100%',
-    flow:'paginated', spread:'none'
+    flow:'scrolled-continuous', spread:'none', manager:'continuous'
   });
-  epubRendition.themes.register('folio',{
-    body:{ 'font-family':'"Noto Serif SC",Georgia,serif','font-size':fsVal+'px','line-height':lhVal,'background':'var(--surface, #fff)','color':'var(--text, #1a1612)','padding':'40px 48px!important','max-width':'680px','margin':'0 auto' },
-    img:{ 'max-width':'100%','height':'auto' }
+
+  // Inject styles via hook — fires per-chapter, faster than global theme registration
+  epubRendition.hooks.content.register(contents=>{
+    contents.addStylesheetRules({
+      'body':{
+        'font-family':'"Noto Serif SC",Georgia,serif !important',
+        'font-size':fsVal+'px !important',
+        'line-height':lhVal+' !important',
+        'padding':'36px 40px !important',
+        'max-width':'680px !important',
+        'margin':'0 auto !important',
+        'color':'inherit !important',
+        'background':'transparent !important'
+      },
+      'p':{ 'margin-bottom':'1.3em !important' },
+      'img':{ 'max-width':'100% !important','height':'auto !important' }
+    });
   });
-  epubRendition.themes.select('folio');
-  
+
   epubRendition.on('relocated', loc=>{
     const p = typeof loc.start.percentage==='number'
       ? Math.round(loc.start.percentage*100)
@@ -1127,22 +1255,23 @@ async function openEpubFull(ab, meta){
       saveBook(currentBook);
     }
   });
-  
-  setLoadingProgress(65,'正在渲染完整 EPUB');
-  const result = await waitWithTimeout(
-    epubRendition.display(meta.epubCfi||undefined).catch(()=> 'display-error'),
-    12000,
-    'timeout'
-  );
-  if(result==='display-error') throw new Error('完整 EPUB 渲染失败');
-  if(result==='timeout'){
-    toast('完整模式加载较慢，可点顶部书本按钮切换快速模式','warn');
-  }
-  setLoadingProgress(96,'正在加载目录');
+
+  setLoadingProgress(55,'正在渲染 EPUB');
+
+  // Start display and load TOC in parallel — don't wait for ready before displaying
+  const displayPromise = epubRendition.display(meta.epubCfi||undefined).catch(()=>'display-error');
+
+  // Load TOC asynchronously without blocking first render
   epubBook.ready.then(()=>{
-    const toc = epubBook.navigation.toc||[];
+    const toc = epubBook.navigation&&epubBook.navigation.toc ? epubBook.navigation.toc : [];
     renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
   }).catch(()=>{});
+
+  const result = await waitWithTimeout(displayPromise, 14000, 'timeout');
+  if(result==='display-error') throw new Error('完整 EPUB 渲染失败，请尝试快速文本模式');
+  if(result==='timeout') toast('完整模式加载较慢，可点顶部书本图标切换快速模式','warn');
+
+  setLoadingProgress(96,'完成');
 }
 
 async function openEpubLazy(ab, meta){
@@ -1232,21 +1361,23 @@ async function renderLazyEpubChapter(index){
   h.textContent = title;
   content.appendChild(h);
   const nodes = doc.body ? [...doc.body.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,pre,img')] : [];
+  // Use DocumentFragment for batch DOM insertion (no reflow per node)
+  const frag = document.createDocumentFragment();
+  const imgPromises = [];
   for(const node of nodes){
     if(node.tagName==='IMG'){
       const src = node.getAttribute('src')||node.getAttribute('data-src')||'';
       const img = document.createElement('img');
       img.alt = node.getAttribute('alt')||'';
+      img.style.maxWidth='100%';
+      frag.appendChild(img);
       if(/^data:/i.test(src)){
         img.src = src;
-        content.appendChild(img);
-        continue;
-      }
-      const imgPath = resolvePath(item.path,src);
-      const url = await blobUrlFromZip(imgPath,node.getAttribute('type')||'');
-      if(url){
-        img.src = url;
-        content.appendChild(img);
+      } else {
+        // Resolve all images in parallel
+        const imgPath = resolvePath(item.path,src);
+        const mime = node.getAttribute('type')||'';
+        imgPromises.push(blobUrlFromZip(imgPath,mime).then(url=>{ if(url) img.src=url; }));
       }
       continue;
     }
@@ -1254,8 +1385,11 @@ async function renderLazyEpubChapter(index){
     if(!value || value===title) continue;
     const el = document.createElement(/^H[1-4]$/.test(node.tagName)?'h2':'p');
     el.textContent = node.tagName==='LI' ? '- '+value : value;
-    content.appendChild(el);
+    frag.appendChild(el);
   }
+  content.appendChild(frag);
+  // Load images in parallel after DOM is shown
+  if(imgPromises.length) Promise.all(imgPromises).catch(()=>{});
   if(content.children.length<=1 && doc.body){
     const p = document.createElement('p');
     p.textContent = doc.body.textContent.replace(/\s+/g,' ').trim();
@@ -1338,7 +1472,18 @@ function renderTxtChunk(){
   const ch = txtChunks[txtChunk];
   if(!ch) return;
   const el = document.getElementById('txtContent');
-  el.innerHTML = `<h2>${ch.title}</h2>`+ ch.paras.map(p=>`<p>${escHtml(p)}</p>`).join('');
+  // Use DocumentFragment: single DOM insertion = no layout thrash per paragraph
+  const frag = document.createDocumentFragment();
+  const h = document.createElement('h2');
+  h.textContent = ch.title;
+  frag.appendChild(h);
+  for(const p of ch.paras){
+    const pel = document.createElement('p');
+    pel.textContent = p;
+    frag.appendChild(pel);
+  }
+  el.innerHTML = '';
+  el.appendChild(frag);
   document.getElementById('txtArea').scrollTop=0;
   const prog = Math.round(txtChunk/(txtChunks.length-1||1)*100);
   setProgBar(prog);
