@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/iconv-lite/0.6.0/iconv-lite.min.js"></script>
 <style>
 /* ── Reset & Base ── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -251,15 +252,24 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
   font-family:var(--serif);margin-bottom:1.2em;margin-top:1.8em;
   font-weight:600;color:var(--text);
 }
+
+/* ── PDF Area - 单页和双页 ── */
 .pdf-area{
   flex:1;overflow-y:auto;background:var(--surface);
   display:flex;flex-direction:column;align-items:center;
   padding:16px;gap:12px;
 }
+.pdf-spread{
+  display:flex;gap:16px;align-items:flex-start;justify-content:center;width:100%;
+}
+.pdf-page-container{
+  flex:0 0 auto;display:flex;flex-direction:column;align-items:center;
+}
 .pdf-area canvas{
   max-width:100%;border:1px solid var(--border);
   border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,.08);
 }
+
 .reader-footer{
   padding:10px 16px;border-top:1px solid var(--border);
   background:var(--surface);
@@ -274,13 +284,21 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
   transition:width .2s;pointer-events:none;
 }
 .prog-info{font-size:12px;color:var(--text3);white-space:nowrap;min-width:40px;text-align:right}
-.nav-arrows{display:flex;gap:4px}
+.nav-arrows{display:flex;gap:4px;align-items:center}
 .arr-btn{
   padding:5px 10px;border-radius:7px;font-size:13px;
   background:var(--surface2);border:1px solid var(--border);
   color:var(--text2);transition:all var(--transition);
 }
 .arr-btn:hover{border-color:var(--accent);color:var(--accent)}
+.spread-toggle{
+  padding:5px 10px;border-radius:7px;font-size:11px;
+  background:var(--surface2);border:1px solid var(--border);
+  color:var(--text2);transition:all var(--transition);
+  cursor:pointer;
+}
+.spread-toggle:hover{border-color:var(--accent);color:var(--accent)}
+.spread-toggle.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
 /* ── Loading Overlay ── */
 .loading-overlay{
@@ -337,6 +355,7 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
   .reader-toolbar{gap:5px}
   .rt-sep{margin:0 2px}
   .toast{bottom:12px;right:12px;left:12px;max-width:none}
+  .pdf-spread{gap:8px}
 }
 
 /* ── File input hidden ── */
@@ -397,7 +416,6 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
       <div class="logo"><span>F</span>olio</div>
       <div class="drive-area">
         <button class="drive-btn" id="driveBtn" onclick="handleDriveAuth()">
-          <!-- Google Drive icon -->
           <svg width="18" height="18" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
             <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
             <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
@@ -429,7 +447,6 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
 
     <div class="book-list" id="sidebarList">
       <div class="sl-label">书库</div>
-      <!-- populated by JS -->
     </div>
   </aside>
 
@@ -443,30 +460,25 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
       </button>
       <div class="topbar-title" id="topbarTitle">Folio 书库</div>
       <div class="topbar-actions">
-        <!-- Search in book -->
         <button class="tb-btn" id="btnSearch" onclick="toggleSearch()" title="搜索" style="display:none">
           <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </button>
-        <!-- Chapters -->
         <button class="tb-btn" id="btnChapters" onclick="toggleChapters()" title="目录" style="display:none">
           <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
         </button>
-        <!-- Bookmark -->
         <button class="tb-btn" id="btnBookmark" onclick="toggleBookmark()" title="书签" style="display:none">
           <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" id="bmkIcon"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
         </button>
-        <!-- Add book -->
         <button class="tb-btn" onclick="document.getElementById('fileInput').click()" title="添加书籍">
           <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
-        <!-- Back to library -->
         <button class="tb-btn" id="btnLibrary" onclick="showLibrary()" title="书库" style="display:none">
           <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </div>
     </div>
 
-    <!-- Search bar (hidden) -->
+    <!-- Search bar -->
     <div class="search-bar" id="searchBar" style="display:none">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input type="text" id="searchInput" placeholder="在书中搜索…" oninput="doSearch()" onkeydown="if(event.key==='Escape')toggleSearch()">
@@ -492,14 +504,11 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
         </div>
       </div>
 
-      <div id="libraryContent">
-        <!-- filled by JS -->
-      </div>
+      <div id="libraryContent"></div>
     </div>
 
     <!-- Reader View -->
     <div class="view reader-view" id="readerView">
-      <!-- Toolbar -->
       <div class="reader-toolbar">
         <div class="rt-group">
           <button class="tb-btn" onclick="fontSize(-1)" title="减小字号">
@@ -526,21 +535,18 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
           <button class="theme-btn t-sepia" onclick="setTheme('sepia')" title="护眼"></button>
           <button class="theme-btn t-dark" onclick="setTheme('dark')" title="夜间"></button>
         </div>
+        <button class="spread-toggle" id="spreadToggle" onclick="toggleSpread()" title="双页阅读" style="display:none">双页</button>
         <div style="margin-left:auto;font-size:12px;color:var(--text3)" id="readerBookTitle"></div>
       </div>
 
-      <!-- EPUB frame -->
       <iframe id="epubFrame" title="EPUB阅读区"></iframe>
 
-      <!-- TXT area -->
       <div class="txt-area" id="txtArea" onscroll="updateProg()" style="display:none">
         <div class="txt-content" id="txtContent"></div>
       </div>
 
-      <!-- PDF area -->
       <div class="pdf-area" id="pdfArea" style="display:none"></div>
 
-      <!-- Chapters panel -->
       <div class="chapters-panel" id="chaptersPanel">
         <div class="cp-head">
           <span class="cp-title">目录</span>
@@ -551,7 +557,6 @@ button{cursor:pointer;background:none;border:none;color:inherit;font-family:inhe
         <div class="cp-list" id="cpList"></div>
       </div>
 
-      <!-- Footer -->
       <div class="reader-footer">
         <div class="nav-arrows" id="pdfNav" style="display:none">
           <button class="arr-btn" onclick="pdfPrev()">‹</button>
@@ -595,11 +600,9 @@ let bookmarkSet = new Set(store.bookmarks||[]);
 let driveConnected = false;
 let driveToken = null;
 
-// epub.js book instance
 let epubBook = null, epubRendition = null;
-// PDF.js
 let pdfDoc = null, pdfPage = 1, pdfTotal = 0;
-// TXT
+let pdfDoublePageMode = false;
 let txtChunks = [], txtChunk = 0;
 
 let fsVal = store.fs||17;
@@ -612,31 +615,32 @@ function loadStore(){
 function saveStore(){
   store.fs = fsVal; store.lh = lhVal;
   store.bookmarks = [...bookmarkSet];
+  store.pdfDoublePageMode = pdfDoublePageMode;
   try{ localStorage.setItem(DB_KEY, JSON.stringify(store)) }catch(e){}
 }
 
-// ─── Book DB (IndexedDB for binary, localStorage for meta) ───────
+// ─── IndexedDB ────────────────────────────────────────────────────
 let idbDB = null;
 function openIDB(){
   return new Promise((res,rej)=>{
     const req = indexedDB.open('folioBooks',1);
     req.onupgradeneeded = e=>{ e.target.result.createObjectStore('files') };
     req.onsuccess = e=>{ idbDB=e.target.result; res() };
-    req.onerror = ()=>rej();
+    req.onerror = ()=>rej(new Error('IndexedDB error'));
   });
 }
 function idbPut(key,val){
   return new Promise((res,rej)=>{
     const tx=idbDB.transaction('files','readwrite');
     tx.objectStore('files').put(val,key);
-    tx.oncomplete=res; tx.onerror=rej;
+    tx.oncomplete=res; tx.onerror=()=>rej(new Error('IDB put failed'));
   });
 }
 function idbGet(key){
   return new Promise((res,rej)=>{
     const tx=idbDB.transaction('files','readonly');
     const req=tx.objectStore('files').get(key);
-    req.onsuccess=()=>res(req.result); req.onerror=rej;
+    req.onsuccess=()=>res(req.result); req.onerror=()=>rej(new Error('IDB get failed'));
   });
 }
 
@@ -651,7 +655,7 @@ function saveBook(meta){
 function deleteBook(id){
   store.books=(store.books||[]).filter(b=>b.id!==id);
   saveStore();
-  idbPut(id,null); // clear binary
+  idbPut(id,null);
 }
 
 const EMOJIS=['📗','📘','📙','📕','📓','📔','📒','🗒️'];
@@ -673,9 +677,6 @@ function renderLibrary(){
     </div>`;
     return;
   }
-  
-  const byType = {};
-  books.forEach(b=>{ (byType[b.type]=byType[b.type]||[]).push(b) });
   
   el.innerHTML = `
     <div class="section-hd">
@@ -713,6 +714,61 @@ function renderSidebar(){
     </div>`).join('');
 }
 
+// ─── 文本编码检测和转换 ────────────────────────────────────
+function detectAndDecodeText(ab){
+  // 尝试 UTF-8
+  let decoder = new TextDecoder('utf-8');
+  let text = decoder.decode(ab);
+  
+  // 检查是否含有有效的中文或其他文字
+  if(text && !containsValidText(text)){
+    // 尝试 GB18030/GBK
+    try{
+      const uint8 = new Uint8Array(ab);
+      // 简单的 GBK 检测：查找常见的 GBK 编码中文字节模式
+      let isGBK = false;
+      for(let i = 0; i < uint8.length - 1; i++){
+        const byte1 = uint8[i];
+        const byte2 = uint8[i+1];
+        // GBK 中文范围大约是 0xA1-0xFE 后跟 0x40-0xFE
+        if((byte1 >= 0xA1 && byte1 <= 0xFE) && (byte2 >= 0x40 && byte2 <= 0xFE)){
+          isGBK = true;
+          break;
+        }
+      }
+      
+      if(isGBK){
+        // 使用 GBK 解码
+        const decoder2 = new TextDecoder('gb18030');
+        text = decoder2.decode(ab);
+      }
+    }catch(e){}
+  }
+  
+  // 如果还是有乱码，再尝试一次
+  if(text.includes('�') || !containsValidText(text)){
+    try{
+      const decoder3 = new TextDecoder('gb18030');
+      const testText = decoder3.decode(ab);
+      if(!testText.includes('�') || countValidChars(testText) > countValidChars(text)){
+        text = testText;
+      }
+    }catch(e){}
+  }
+  
+  return text;
+}
+
+function containsValidText(text){
+  // 检查是否包含中文或其他有效字符
+  const validChars = /[\u4E00-\u9FFF\u3040-\u309F\uAC00-\uD7AFa-zA-Z0-9]/g;
+  return validChars.test(text);
+}
+
+function countValidChars(text){
+  return (text.match(/[\u4E00-\u9FFF\u3040-\u309F\uAC00-\uD7AFa-zA-Z0-9]/g) || []).length;
+}
+
 // ─── File Handling ────────────────────────────────────────────────
 async function handleFiles(files){
   for(const file of files){
@@ -729,7 +785,6 @@ async function handleFiles(files){
       let title = file.name.replace(/\.[^.]+$/,'');
       let author = '';
       
-      // Extract EPUB metadata
       if(ext==='epub'){
         try{
           const zip = await JSZip.loadAsync(ab);
@@ -743,20 +798,21 @@ async function handleFiles(files){
             if(t) title = t.textContent.trim();
             if(a) author = a.textContent.trim();
           }
-        }catch(e){}
+        }catch(e){ console.error('EPUB metadata error:', e) }
       }
       
       const meta = { id, title, author, type:ext, emoji:randEmoji(), color:randColor(), prog:0, size:file.size, added:Date.now() };
       saveBook(meta);
       
-      // Sync to Drive
       if(driveConnected && driveToken) syncToDrive(id, ab, meta);
       
       hideLoading();
       toast('「'+title+'」已添加到书库','success');
       renderLibrary(); renderSidebar();
     }catch(e){
-      hideLoading(); toast('导入失败：'+e.message,'warn');
+      hideLoading(); 
+      console.error('Import error:', e);
+      toast('导入失败：'+e.message,'warn');
     }
   }
 }
@@ -779,7 +835,6 @@ async function openBook(id){
   meta.lastRead = Date.now();
   saveBook(meta);
   
-  // Switch view
   document.getElementById('libraryView').style.display='none';
   document.getElementById('readerView').classList.add('active');
   document.getElementById('topbarTitle').textContent = meta.title;
@@ -788,30 +843,33 @@ async function openBook(id){
   document.getElementById('btnChapters').style.display='';
   document.getElementById('btnBookmark').style.display='';
   document.getElementById('btnLibrary').style.display='';
+  document.getElementById('spreadToggle').style.display = meta.type==='pdf'?'':'none';
   updateBookmarkIcon();
   
-  const ab = await idbGet(id);
-  if(!ab){ hideLoading(); toast('找不到文件数据','warn'); showLibrary(); return; }
-  
-  // Reset areas
-  document.getElementById('epubFrame').style.display='none';
-  document.getElementById('txtArea').style.display='none';
-  document.getElementById('pdfArea').style.display='none';
-  document.getElementById('pdfNav').style.display='none';
-  document.getElementById('cpList').innerHTML='';
-  if(epubBook){ try{ epubBook.destroy() }catch(e){} epubBook=null; }
-  
   try{
+    const ab = await idbGet(id);
+    if(!ab){ throw new Error('找不到文件数据') }
+    
+    document.getElementById('epubFrame').style.display='none';
+    document.getElementById('txtArea').style.display='none';
+    document.getElementById('pdfArea').style.display='none';
+    document.getElementById('pdfNav').style.display='none';
+    document.getElementById('cpList').innerHTML='';
+    if(epubBook){ try{ epubBook.destroy() }catch(e){} epubBook=null; }
+    
     if(meta.type==='epub') await openEpub(ab, meta);
     else if(meta.type==='txt') openTxt(ab, meta);
     else if(meta.type==='pdf') await openPdf(ab, meta);
+    
+    renderSidebar();
+    closeSidebar();
+    applyReaderSettings();
   }catch(e){
-    hideLoading(); toast('打开失败：'+e.message,'warn');
+    console.error('Open book error:', e);
+    toast('打开失败：'+e.message,'warn');
+    showLibrary();
   }
   
-  renderSidebar();
-  closeSidebar();
-  applyReaderSettings();
   hideLoading();
 }
 
@@ -824,129 +882,208 @@ async function openEpub(ab, meta){
   const frame = document.getElementById('epubFrame');
   frame.style.display='block';
   
-  epubRendition = epubBook.renderTo(frame, {
-    width:'100%', height:'100%',
-    flow:'paginated', spread:'none'
-  });
-  
-  // Apply theme to epub
-  epubRendition.themes.register('folio',{
-    body:{ 'font-family':'"Noto Serif SC",Georgia,serif','font-size':fsVal+'px','line-height':lhVal,'background':'var(--surface, #fff)','color':'var(--text, #1a1612)','padding':'40px 48px!important','max-width':'680px','margin':'0 auto' }
-  });
-  epubRendition.themes.select('folio');
-  
-  const prog = (meta.prog||0)/100;
-  await epubBook.ready;
-  
-  // Chapters
-  const toc = epubBook.navigation.toc;
-  renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
-  
-  if(prog>0){
-    const cfi = await epubBook.locations.cfiFromPercentage(prog);
-    epubRendition.display(cfi);
-  } else {
-    epubRendition.display();
+  try{
+    epubRendition = epubBook.renderTo(frame, {
+      width:'100%', height:'100%',
+      flow:'paginated', spread:'none'
+    });
+    
+    epubRendition.themes.register('folio',{
+      body:{ 'font-family':'"Noto Serif SC",Georgia,serif','font-size':fsVal+'px','line-height':lhVal,'background':'var(--surface, #fff)','color':'var(--text, #1a1612)','padding':'40px 48px!important','max-width':'680px','margin':'0 auto' }
+    });
+    epubRendition.themes.select('folio');
+    
+    const prog = (meta.prog||0)/100;
+    await epubBook.ready;
+    
+    const toc = epubBook.navigation.toc;
+    renderChapters(toc, (href)=>{ epubRendition.display(href); toggleChapters() });
+    
+    if(prog>0){
+      const cfi = await epubBook.locations.cfiFromPercentage(prog);
+      epubRendition.display(cfi);
+    } else {
+      epubRendition.display();
+    }
+    
+    epubRendition.on('relocated', loc=>{
+      const p = Math.round(loc.start.percentage*100);
+      setProgBar(p);
+      if(currentBook){ currentBook.prog=p; saveBook(currentBook) }
+    });
+  }catch(e){
+    throw new Error('EPUB 渲染失败：'+e.message);
   }
-  
-  epubRendition.on('relocated', loc=>{
-    const p = Math.round(loc.start.percentage*100);
-    setProgBar(p);
-    if(currentBook){ currentBook.prog=p; saveBook(currentBook) }
-  });
 }
 
 // ─── TXT ──────────────────────────────────────────────────────────
 function openTxt(ab, meta){
-  const dec = new TextDecoder('utf-8');
-  let text = dec.decode(ab);
-  
-  // Try GB18030 if garbled
-  if(text.includes('�')){
-    try{
-      const dec2 = new TextDecoder('gb18030');
-      text = dec2.decode(ab);
-    }catch(e){}
+  try{
+    const text = detectAndDecodeText(ab);
+    
+    const paras = text.split(/\n+/).filter(p=>p.trim().length > 0);
+    
+    const chapters = [];
+    let curChapter = {title:'正文',paras:[]};
+    paras.forEach(p=>{
+      if(/^第[零一二三四五六七八九十百千万亿兆\d]+[章节回篇卷部集]/.test(p.trim()) && p.trim().length<60){
+        if(curChapter.paras.length) chapters.push(curChapter);
+        curChapter = {title:p.trim(),paras:[]};
+      } else { 
+        curChapter.paras.push(p) 
+      }
+    });
+    if(curChapter.paras.length) chapters.push(curChapter);
+    
+    if(chapters.length === 0){
+      chapters.push({title:'全文', paras: paras});
+    }
+    
+    txtChunks = chapters;
+    txtChunk = Math.round((meta.prog||0)/100*(chapters.length-1));
+    
+    renderChapters(chapters.map((c,i)=>({label:c.title,index:i})), (i)=>{ txtChunk=i; renderTxtChunk(); toggleChapters() });
+    
+    document.getElementById('txtArea').style.display='block';
+    renderTxtChunk();
+  }catch(e){
+    throw new Error('TXT 解析失败：'+e.message);
   }
-  
-  // Split into paragraphs and chunk
-  const paras = text.split(/\n+/).filter(p=>p.trim());
-  
-  // Build chapters from headings
-  const chapters = [];
-  let curChapter = {title:'正文',paras:[]};
-  paras.forEach(p=>{
-    if(/^第[零一二三四五六七八九十百千万\d]+[章节回篇卷]/.test(p.trim()) && p.trim().length<60){
-      if(curChapter.paras.length) chapters.push(curChapter);
-      curChapter = {title:p.trim(),paras:[]};
-    } else { curChapter.paras.push(p) }
-  });
-  if(curChapter.paras.length) chapters.push(curChapter);
-  
-  txtChunks = chapters;
-  txtChunk = Math.round((meta.prog||0)/100*(chapters.length-1));
-  
-  renderChapters(chapters.map((c,i)=>({label:c.title,index:i})), (i)=>{ txtChunk=i; renderTxtChunk(); toggleChapters() });
-  
-  document.getElementById('txtArea').style.display='block';
-  renderTxtChunk();
 }
 
 function renderTxtChunk(){
+  if(txtChunks.length===0) return;
   const ch = txtChunks[txtChunk];
   if(!ch) return;
   const el = document.getElementById('txtContent');
-  el.innerHTML = `<h2>${ch.title}</h2>`+ ch.paras.map(p=>`<p>${escHtml(p)}</p>`).join('');
+  el.innerHTML = `<h2>${escHtml(ch.title)}</h2>`+ ch.paras.map(p=>`<p>${escHtml(p)}</p>`).join('');
   document.getElementById('txtArea').scrollTop=0;
-  const prog = Math.round(txtChunk/(txtChunks.length-1||1)*100);
+  const prog = txtChunks.length>1?Math.round(txtChunk/(txtChunks.length-1)*100):0;
   setProgBar(prog);
   if(currentBook){ currentBook.prog=prog; saveBook(currentBook) }
   document.getElementById('cpList').querySelectorAll('.cp-item').forEach((el,i)=>el.classList.toggle('active',i===txtChunk));
   applyReaderSettings();
 }
 
-function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') }
 
-// ─── PDF ──────────────────────────────────────────────────────────
+// ─── PDF 双页模式 ─────────────────────────────────────────────────
 async function openPdf(ab, meta){
-  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  pdfDoc = await pdfjsLib.getDocument({data:ab}).promise;
-  pdfTotal = pdfDoc.numPages;
-  pdfPage = Math.max(1,Math.round((meta.prog||0)/100*(pdfTotal-1))+1);
-  
-  document.getElementById('pdfArea').style.display='flex';
-  document.getElementById('pdfNav').style.display='flex';
-  
-  // Build outline chapters
   try{
-    const outline = await pdfDoc.getOutline();
-    if(outline && outline.length){
-      renderChapters(outline.map((o,i)=>({label:o.title,index:i})), ()=>{});
-    }
-  }catch(e){}
-  
-  await renderPdfPage();
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    pdfDoc = await pdfjsLib.getDocument({data:ab}).promise;
+    pdfTotal = pdfDoc.numPages;
+    pdfPage = Math.max(1,Math.round((meta.prog||0)/100*(pdfTotal-1))+1);
+    pdfDoublePageMode = store.pdfDoublePageMode || false;
+    
+    document.getElementById('pdfArea').style.display='flex';
+    document.getElementById('pdfNav').style.display='flex';
+    
+    try{
+      const outline = await pdfDoc.getOutline();
+      if(outline && outline.length){
+        renderChapters(outline.map((o,i)=>({label:o.title,index:i})), ()=>{});
+      }
+    }catch(e){}
+    
+    await renderPdfPage();
+  }catch(e){
+    throw new Error('PDF 打开失败：'+e.message);
+  }
 }
 
 async function renderPdfPage(){
   const area = document.getElementById('pdfArea');
   area.innerHTML='';
-  const page = await pdfDoc.getPage(pdfPage);
+  
+  if(pdfDoublePageMode && pdfTotal > 1){
+    area.classList.add('pdf-spread');
+    const container = document.createElement('div');
+    container.className = 'pdf-spread';
+    
+    // 左页
+    if(pdfPage > 1){
+      const leftContainer = document.createElement('div');
+      leftContainer.className = 'pdf-page-container';
+      const leftPage = await pdfDoc.getPage(pdfPage - 1);
+      const leftCanvas = await renderPageToCanvas(leftPage);
+      leftContainer.appendChild(leftCanvas);
+      container.appendChild(leftContainer);
+    }
+    
+    // 右页
+    if(pdfPage <= pdfTotal){
+      const rightContainer = document.createElement('div');
+      rightContainer.className = 'pdf-page-container';
+      const rightPage = await pdfDoc.getPage(pdfPage);
+      const rightCanvas = await renderPageToCanvas(rightPage);
+      rightContainer.appendChild(rightCanvas);
+      container.appendChild(rightContainer);
+    }
+    
+    area.appendChild(container);
+    updatePdfPageInfo();
+  } else {
+    const page = await pdfDoc.getPage(pdfPage);
+    const canvas = await renderPageToCanvas(page);
+    area.appendChild(canvas);
+    document.getElementById('pdfPageInfo').textContent=`${pdfPage} / ${pdfTotal}`;
+  }
+  
+  const prog = Math.round((pdfPage-1)/(pdfTotal-1||1)*100);
+  setProgBar(prog);
+  if(currentBook){ currentBook.prog=prog; saveBook(currentBook) }
+}
+
+async function renderPageToCanvas(page){
+  const area = document.getElementById('pdfArea');
   const vp = page.getViewport({scale:1});
-  const scale = Math.min((area.clientWidth-32)/vp.width, 2);
+  let scale;
+  if(pdfDoublePageMode){
+    scale = Math.min((area.clientWidth/2-32)/vp.width, 1.5);
+  } else {
+    scale = Math.min((area.clientWidth-32)/vp.width, 2);
+  }
   const viewport = page.getViewport({scale});
   const canvas = document.createElement('canvas');
   canvas.width = viewport.width;
   canvas.height = viewport.height;
-  area.appendChild(canvas);
   await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
-  const prog = Math.round((pdfPage-1)/(pdfTotal-1||1)*100);
-  setProgBar(prog);
-  document.getElementById('pdfPageInfo').textContent=`${pdfPage} / ${pdfTotal}`;
-  if(currentBook){ currentBook.prog=prog; saveBook(currentBook) }
+  return canvas;
 }
-function pdfNext(){ if(pdfPage<pdfTotal){ pdfPage++; renderPdfPage() } }
-function pdfPrev(){ if(pdfPage>1){ pdfPage--; renderPdfPage() } }
+
+function updatePdfPageInfo(){
+  if(pdfDoublePageMode){
+    const left = Math.max(1, pdfPage - 1);
+    const right = pdfPage;
+    document.getElementById('pdfPageInfo').textContent=`${left}-${right} / ${pdfTotal}`;
+  } else {
+    document.getElementById('pdfPageInfo').textContent=`${pdfPage} / ${pdfTotal}`;
+  }
+}
+
+function toggleSpread(){
+  pdfDoublePageMode = !pdfDoublePageMode;
+  document.getElementById('spreadToggle').classList.toggle('active', pdfDoublePageMode);
+  saveStore();
+  renderPdfPage();
+}
+
+function pdfNext(){ 
+  if(pdfDoublePageMode){
+    if(pdfPage < pdfTotal){ pdfPage = Math.min(pdfTotal, pdfPage + 2); renderPdfPage() }
+  } else {
+    if(pdfPage < pdfTotal){ pdfPage++; renderPdfPage() }
+  }
+}
+
+function pdfPrev(){ 
+  if(pdfDoublePageMode){
+    if(pdfPage > 1){ pdfPage = Math.max(1, pdfPage - 2); renderPdfPage() }
+  } else {
+    if(pdfPage > 1){ pdfPage--; renderPdfPage() }
+  }
+}
 
 // ─── Chapters Panel ───────────────────────────────────────────────
 function renderChapters(items, onSelect){
@@ -1006,10 +1143,14 @@ function seekProg(e){
     const idx = Math.round(pct*(txtChunks.length-1));
     txtChunk=idx; renderTxtChunk();
   } else if(currentBook.type==='pdf'){
-    pdfPage=Math.max(1,Math.min(pdfTotal,Math.round(pct*(pdfTotal-1))+1));
+    if(pdfDoublePageMode){
+      pdfPage = Math.max(1, Math.min(pdfTotal, Math.round(pct*(pdfTotal-1))+1));
+      if(pdfPage % 2 === 0) pdfPage--;
+    } else {
+      pdfPage = Math.max(1, Math.min(pdfTotal, Math.round(pct*(pdfTotal-1))+1));
+    }
     renderPdfPage();
   } else if(currentBook.type==='epub' && epubBook){
-    epubBook.locations.percentageFromCfi(null).then?null:null;
     epubRendition&&epubRendition.display(epubBook.locations.cfiFromPercentage(pct));
   }
 }
@@ -1060,6 +1201,7 @@ function showLibrary(){
   document.getElementById('btnChapters').style.display='none';
   document.getElementById('btnBookmark').style.display='none';
   document.getElementById('btnLibrary').style.display='none';
+  document.getElementById('spreadToggle').style.display='none';
   document.getElementById('searchBar').style.display='none';
   searchOpen=false; chaptersOpen=false;
   document.getElementById('chaptersPanel').classList.remove('open');
@@ -1097,43 +1239,37 @@ function toast(msg, type){
 }
 
 // ─── Google Drive Integration ────────────────────────────────────
-// NOTE: Replace with your actual Google OAuth2 Client ID
 const GOOGLE_CLIENT_ID = '620758146458-6no9mc05e1j2s7f04tcnqrl74n5c2ti1.apps.googleusercontent.com';
 const DRIVE_FOLDER = 'Folio 书库';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
 function handleDriveAuth(){
   if(driveConnected){ disconnectDrive(); return; }
-  
-  // Check if Google API is available
   if(typeof google==='undefined' || typeof google.accounts==='undefined'){
-    // Load Google Identity Services
     const s=document.createElement('script');
     s.src='https://accounts.google.com/gsi/client';
     s.onload=()=>startDriveAuth();
-    s.onerror=()=>toast('请在 Google Drive 配置说明中填写 Client ID','warn');
+    s.onerror=()=>toast('Google 服务加载失败','warn');
     document.head.appendChild(s);
   } else { startDriveAuth() }
 }
 
 function startDriveAuth(){
   if(GOOGLE_CLIENT_ID.startsWith('YOUR_')){
-    // Demo mode without real auth
     driveConnected=true;
     updateDriveUI();
-    toast('演示模式：请配置真实的 Google Client ID 以启用同步','info');
+    toast('演示模式：请配置真实的 Google Client ID','info');
     return;
   }
   google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
     scope: SCOPES,
     callback: (res)=>{
-      if(res.error){ toast('授权失败：'+res.error,'warn'); return; }
+      if(res.error){ toast('授权失败','warn'); return; }
       driveToken=res.access_token;
       driveConnected=true;
       updateDriveUI();
-      toast('Google Drive 已连接，书库将自动同步','success');
-      syncAllToDrive();
+      toast('Google Drive 已连接','success');
     }
   }).requestAccessToken();
 }
@@ -1150,13 +1286,12 @@ function updateDriveUI(){
   const status=document.getElementById('driveStatus');
   btn.classList.toggle('connected',driveConnected);
   txt.textContent=driveConnected?'已连接 Google Drive':'连接 Google Drive';
-  status.textContent=driveConnected?'书库已启用云端同步':'';
+  status.textContent=driveConnected?'云端同步已启用':'';
 }
 
 async function syncToDrive(id, ab, meta){
   if(!driveToken) return;
   try{
-    // Create or find Folio folder
     let folderId = store.driveFolderId;
     if(!folderId){
       const res = await gFetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+encodeURIComponent(DRIVE_FOLDER)+'%22+and+mimeType%3D%22application%2Fvnd.google-apps.folder%22+and+trashed%3Dfalse',{method:'GET'});
@@ -1168,22 +1303,11 @@ async function syncToDrive(id, ab, meta){
       }
       store.driveFolderId=folderId; saveStore();
     }
-    // Upload file
     const form=new FormData();
     form.append('metadata',new Blob([JSON.stringify({name:meta.title+'.'+meta.type,parents:[folderId]})],{type:'application/json'}));
     form.append('file',new Blob([ab]));
     await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+driveToken},body:form});
-    toast('「'+meta.title+'」已同步到 Drive','success');
   }catch(e){ console.error('Drive sync error',e) }
-}
-
-async function syncAllToDrive(){
-  if(!driveToken) return;
-  const books=getBooks();
-  for(const meta of books){
-    const ab=await idbGet(meta.id);
-    if(ab) await syncToDrive(meta.id,ab,meta);
-  }
 }
 
 function gFetch(url,opts={}){
@@ -1194,8 +1318,11 @@ function gFetch(url,opts={}){
 openIDB().then(()=>{
   renderLibrary();
   renderSidebar();
-  // Set default theme button active
   document.querySelector('.t-light').classList.add('active');
+  pdfDoublePageMode = store.pdfDoublePageMode || false;
+}).catch(err=>{
+  console.error('初始化失败:', err);
+  toast('初始化失败：'+err.message,'warn');
 });
 
 // Keyboard shortcuts
